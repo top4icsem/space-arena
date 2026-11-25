@@ -27,12 +27,33 @@ export function parseClientMessage(input, maxBytes = 2048) {
     throw new ProtocolError('Invalid envelope or version');
   if (
     msg.type === 'join' &&
-    only(msg, ['v', 'type', 'room', 'name']) &&
+    only(msg, ['v', 'type', 'room', 'name', 'wire']) &&
     text(msg.room, 1, 40) &&
-    text(msg.name, 1, 20)
+    text(msg.name, 1, 20) &&
+    (msg.wire === undefined || ['binary', 'json'].includes(msg.wire))
   )
     return msg;
   if (msg.type === 'chat' && only(msg, ['v', 'type', 'text']) && text(msg.text, 1, 300)) return msg;
+  if (
+    msg.type === 'input' &&
+    only(msg, ['v', 'type', 'seq', 'mask']) &&
+    Number.isInteger(msg.seq) &&
+    msg.seq >= 1 &&
+    msg.seq <= 0xffffffff &&
+    Number.isInteger(msg.mask) &&
+    msg.mask >= 0 &&
+    msg.mask <= 63
+  )
+    return msg;
+  if (
+    msg.type === 'probe' &&
+    only(msg, ['v', 'type', 'sent']) &&
+    typeof msg.sent === 'number' &&
+    Number.isFinite(msg.sent) &&
+    msg.sent >= 0 &&
+    msg.sent < 1e12
+  )
+    return msg;
   if (msg.type === 'leave' && only(msg, ['v', 'type'])) return msg;
   throw new ProtocolError(`Unknown or malformed type: ${msg.type}`);
 }

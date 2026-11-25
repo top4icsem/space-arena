@@ -1,4 +1,5 @@
-/** The browser transport knows only messages; simulation remains entirely local in Lab 04. */
+import { encodeInput, decodeSnapshot } from '../../../shared/codec.js';
+/** WebSocket transport: chat remains JSON; input and snapshots default to DataView binary. */
 export class SocketConnection extends EventTarget {
   constructor({ url = null, WebSocketImpl = WebSocket, maxQueue = 32, random = Math.random } = {}) {
     super();
@@ -13,6 +14,7 @@ export class SocketConnection extends EventTarget {
     this.manual = true;
     this.timer = null;
     this.pendingJoin = null;
+    this.wire = 'binary';
   }
   get status() {
     return this.socket?.readyState === this.WebSocketImpl.OPEN
@@ -24,9 +26,10 @@ export class SocketConnection extends EventTarget {
   emit(type, detail) {
     this.dispatchEvent(new CustomEvent(type, { detail }));
   }
-  async join(name, room) {
+  async join(name, room, wire = 'binary') {
     this.disconnect();
-    this.credentials = { v: 0, type: 'join', name, room };
+    this.wire = wire;
+    this.credentials = { v: 0, type: 'join', name, room, wire };
     this.manual = false;
     this.attempt = 0;
     return new Promise((resolve, reject) => {
@@ -59,6 +62,7 @@ export class SocketConnection extends EventTarget {
       return;
     }
     this.socket = socket;
+    socket.binaryType = 'arraybuffer';
     this.emit('status', 'connecting');
     socket.addEventListener('open', () => {
       if (socket !== this.socket) return;
@@ -67,6 +71,17 @@ export class SocketConnection extends EventTarget {
       this.emit('status', 'connected');
     });
     socket.addEventListener('message', (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        try {
+          this.emit('snapshot', {
+            frame: decodeSnapshot(event.data),
+            bytes: event.data.byteLength,
+          });
+        } catch (error) {
+          this.emit('status', `invalid snapshot: ${error.message}`);
+        }
+        return;
+      }
       let payload;
       try {
         payload = JSON.parse(event.data);
@@ -74,12 +89,17 @@ export class SocketConnection extends EventTarget {
         return;
       }
       if (!payload || typeof payload.type !== 'string' || payload.v !== 0) return;
+      if (payload.type === 'snapshot')
+        this.emit('snapshot', {
+          frame: payload,
+          bytes: new TextEncoder().encode(event.data).byteLength,
+        });
       if (payload.type === 'joined') {
         this.pendingJoin?.resolve(payload);
         this.pendingJoin = null;
         this.flush();
       }
-      this.emit(payload.type, payload);
+      if (payload.type !== 'snapshot') this.emit(payload.type, payload);
     });
     socket.addEventListener('close', (event) => {
       if (socket !== this.socket) return;
@@ -103,6 +123,19 @@ export class SocketConnection extends EventTarget {
     this.emit('status', `reconnecting in ${(delay / 1000).toFixed(1)}s`);
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.open(), delay);
+  }
+  sendInput(seq, mask) {
+    if (this.manual || this.pendingJoin || this.socket?.readyState !== this.WebSocketImpl.OPEN)
+      return 0;
+    if (this.socket.bufferedAmount > 32 * 1024) return 0;
+    if (this.wire === 'json') {
+      const data = JSON.stringify({ v: 0, type: 'input', seq, mask });
+      this.socket.send(data);
+      return new TextEncoder().encode(data).byteLength;
+    }
+    const data = encodeInput({ seq, mask });
+    this.socket.send(data);
+    return data.byteLength;
   }
   send(type, details = {}) {
     if (this.manual || !this.credentials) return false;

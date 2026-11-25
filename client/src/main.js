@@ -12,6 +12,7 @@ import { Lobby } from './lobby/lobby.js';
 import { createLobbyView } from './lobby/view.js';
 import { drawLoading, drawLoadError } from './ui/loading.js';
 import { SocketConnection } from './network/connection.js';
+import { NetworkGame } from './network/netcode.js';
 
 const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(window.location.search);
@@ -19,6 +20,8 @@ const experiment = ['block', 'interval', 'variable'].includes(params.get('experi
   ? params.get('experiment')
   : null;
 const autoThrust = params.get('autothrust') === '1';
+const networkMode = !autoThrust && params.get('legacy') !== '1';
+const wire = params.get('wire') === 'json' ? 'json' : 'binary';
 let failureMode = params.get('failure');
 const canvas = $('#arena');
 const surface = createCanvasSurface(canvas);
@@ -27,6 +30,14 @@ const eventBus = new EventTarget();
 const audio = createAudioController(eventBus);
 const lobby = new Lobby();
 const connection = new SocketConnection();
+const netGame = new NetworkGame(connection, {
+  prediction: params.get('predict') !== '0',
+  divergence: params.get('diverge') === '1',
+  latency: Number(params.get('latency') || 0),
+  jitter: Number(params.get('jitter') || 0),
+  loss: Number(params.get('loss') || 0),
+});
+netGame.eventBus = eventBus;
 const chatStatus = $('#network-status');
 const roster = $('#network-roster');
 const chatMessages = $('#chat-messages');
@@ -52,7 +63,8 @@ const lobbyView = createLobbyView($('#lobby-overlay'), {
     audio.unlock();
     try {
       lobbyView.error('Joining live Node.js room…');
-      await connection.join(name, roomId);
+      const welcome = await connection.join(name, roomId, wire);
+      netGame.joined(welcome);
       lobby.join(name, roomId);
     } catch (error) {
       lobbyView.error(`Could not join: ${error.message}`);
@@ -71,9 +83,16 @@ const lobbyView = createLobbyView($('#lobby-overlay'), {
 
 function resetSimulation() {
   if (phase !== 'playing') return;
-  game = new Game({ roomConfig: activeRoom, eventBus });
-  current = autoThrust ? createShip(ARENA.width / 2, ARENA.height / 2) : game.playerState;
-  previous = { ...current };
+  if (networkMode) {
+    // R resets client-side prediction drift, never teleports the server's ship.
+    netGame.offset = { x: 0, y: 0 };
+    current = netGame.getVisualState() || createShip(ARENA.width / 2, ARENA.height / 2);
+    previous = { ...current };
+  } else {
+    game = new Game({ roomConfig: activeRoom, eventBus });
+    current = autoThrust ? createShip(ARENA.width / 2, ARENA.height / 2) : game.playerState;
+    previous = { ...current };
+  }
   simulatedSeconds = 0;
   benchmarkComplete = false;
   input.endStep();
@@ -110,6 +129,13 @@ function simulate(dt) {
       $('#experiment-alert').textContent =
         `5.00s benchmark: x=${result.x}, y=${result.y}, speed=${result.velocity}.`;
     }
+  } else if (networkMode) {
+    netGame.simulate(dt, {
+      ...input.snapshot(),
+      fire: input.isDown('Space'),
+      guided: input.isDown('ShiftLeft') || input.isDown('ShiftRight'),
+    });
+    current = netGame.getVisualState() || current;
   } else {
     game.simulate(dt, input.snapshot(), {
       shooting: input.isDown('Space'),
@@ -136,8 +162,8 @@ function updateFlightTelemetry() {
   for (const key of ['w', 'a', 's', 'd']) {
     $(`#key-${key}`).classList.toggle('pressed', input.isDown(`Key${key.toUpperCase()}`));
   }
-  if (!autoThrust && game) {
-    const hud = game.hud;
+  if (!autoThrust && (game || networkMode)) {
+    const hud = networkMode ? netGame.hud : game.hud;
     $('#score').textContent = hud.score.toLocaleString('en-US');
     $('#health').textContent = `${'♥'.repeat(hud.hp)}${'♡'.repeat(hud.maxHp - hud.hp)}`;
     $('#asteroids').textContent = String(hud.asteroids);
@@ -145,13 +171,28 @@ function updateFlightTelemetry() {
     $('#respawn-status').textContent =
       hud.respawnIn > 0 ? `RESPAWN ${hud.respawnIn.toFixed(1)}s` : 'READY';
   }
+  if (networkMode) {
+    const stats = netGame.stats;
+    $('#net-rtt').textContent = stats.rtt == null ? '—' : `${stats.rtt.toFixed(0)} ms`;
+    $('#net-age').textContent = stats.age == null ? '—' : `${stats.age} ms`;
+    $('#net-bytes').textContent = `${stats.inRate} ↓ / ${stats.outRate} ↑`;
+    $('#net-queue').textContent = String(stats.queued);
+    $('#net-correction').textContent = `${stats.correction.toFixed(1)} px`;
+    $('#net-buffer').style.width = `${Math.min(100, stats.queued * 4)}%`;
+  }
 }
 
 const loop = createLoop({
   simulate,
   render(alpha, stats, timestamp) {
     if (phase !== 'playing' || !renderer) return;
-    renderer.render(previous, current, alpha, timestamp, autoThrust ? null : game.world);
+    renderer.render(
+      previous,
+      current,
+      alpha,
+      timestamp,
+      networkMode ? netGame.getWorld() : autoThrust ? null : game.world,
+    );
     if (timestamp - lastHudUpdate > 90) {
       lastHudUpdate = timestamp;
       $('#frame-time').textContent = stats.frameMs.toFixed(1);
@@ -172,6 +213,7 @@ function setPaused(next) {
   paused = next;
   if (paused) loop.stop();
   else loop.start();
+  if (networkMode) $('#system-status').textContent = 'SERVER CONTINUES WHEN PAUSED';
   $('#pause-overlay').hidden = !paused;
   $('#pause-label').textContent = paused ? 'Resume simulation' : 'Pause simulation';
   $('#pause-icon').textContent = paused ? '▶' : 'Ⅱ';
@@ -184,6 +226,7 @@ function setPaused(next) {
 
 async function showLobby() {
   connection.disconnect();
+  netGame.reset();
   roster.replaceChildren();
   chatMessages.replaceChildren();
   phase = 'lobby';
@@ -239,7 +282,13 @@ lobby.addEventListener('join', ({ detail }) => {
     $('#experiment-alert').hidden = false;
     $('#experiment-alert').textContent = 'Lab 01 automated 5-second trajectory benchmark.';
   }
-  renderer.render(previous, current, 1, 0, autoThrust ? null : game.world);
+  renderer.render(
+    previous,
+    current,
+    1,
+    0,
+    networkMode ? netGame.getWorld() : autoThrust ? null : game.world,
+  );
   loop.start();
   canvas.focus({ preventScroll: true });
 });
@@ -281,6 +330,27 @@ async function boot() {
   }
 }
 
+connection.addEventListener('snapshot', ({ detail }) => {
+  if (networkMode) netGame.receive(detail.frame, detail.bytes);
+});
+connection.addEventListener('probe', ({ detail }) => {
+  if (networkMode) netGame.rtt = Math.max(0, performance.now() - detail.sent);
+});
+connection.addEventListener('combat', ({ detail }) => {
+  if (!networkMode || phase !== 'playing') return;
+  const event = detail.event;
+  if (event.type === 'fired' && event.player !== netGame.id) {
+    eventBus.dispatchEvent(new CustomEvent('fired', { detail: { team: 'enemy' } }));
+  }
+  if (event.type === 'hit')
+    eventBus.dispatchEvent(
+      new CustomEvent('hit', { detail: { kind: event.asteroid ? 'asteroid' : 'ship' } }),
+    );
+  if (event.type === 'exploded')
+    eventBus.dispatchEvent(
+      new CustomEvent('exploded', { detail: { kind: event.asteroid ? 'asteroid' : 'ship' } }),
+    );
+});
 connection.addEventListener('status', ({ detail }) => {
   chatStatus.textContent = String(detail).toUpperCase();
 });
@@ -327,6 +397,18 @@ $('#retry-assets').addEventListener('click', () => {
 });
 $('#pause-button').addEventListener('click', () => setPaused(!paused));
 $('#reset-button').addEventListener('click', resetSimulation);
+$('#prediction-toggle').addEventListener('click', () => {
+  netGame.prediction = !netGame.prediction;
+  netGame.pending.length = 0;
+  $('#prediction-toggle').textContent = netGame.prediction ? 'Prediction ON' : 'Server only';
+});
+$('#divergence-toggle').addEventListener('click', () => {
+  netGame.divergence = !netGame.divergence;
+  $('#divergence-toggle').textContent = netGame.divergence ? 'Divergence ON' : 'Divergence OFF';
+});
+$('#prediction-toggle').textContent = netGame.prediction ? 'Prediction ON' : 'Server only';
+$('#divergence-toggle').textContent = netGame.divergence ? 'Divergence ON' : 'Divergence OFF';
+$('#wire-mode').textContent = wire.toUpperCase();
 $('#back-to-lobby').addEventListener('click', () => {
   if (phase !== 'playing') return;
   void showLobby();
@@ -379,6 +461,10 @@ window.__spaceArenaDebug = Object.freeze({
     status: connection.status,
     room: activeRoom?.id,
     queue: connection.queue.length,
+    mode: wire,
+    stats: netGame.stats,
+    netId: netGame.id,
+    players: netGame.frames.at(-1)?.players.length ?? 0,
   }),
   // Measurements only; explicitly opt in from DevTools, not run in normal boot.
   compareAssetLoading: () => measureLoading(manifest),
@@ -393,6 +479,7 @@ window.addEventListener('pagehide', () => {
   watcherController?.abort();
   lobby.stop();
   connection.disconnect();
+  netGame.reset();
   loop.stop();
   input.dispose();
   audio.close();

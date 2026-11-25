@@ -61,11 +61,25 @@ export class MatchLogStore {
   async close(roomId) {
     const entry = this.active.get(roomId);
     if (!entry) return;
-    this.active.delete(roomId);
+
+    if (entry.closePromise) {
+      await entry.closePromise;
+      return;
+    }
+
     entry.closing = true;
     entry.room.off('event', entry.feed);
-    entry.source.end();
-    await entry.task;
+
+    entry.closePromise = (async () => {
+      entry.source.end();
+      await entry.task;
+    })();
+
+    try {
+      await entry.closePromise;
+    } finally {
+      this.active.delete(roomId);
+    }
   }
   async closeAll() {
     await Promise.allSettled([...this.active.keys()].map((id) => this.close(id)));

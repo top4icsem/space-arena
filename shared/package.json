@@ -1,0 +1,7 @@
+{
+  "name": "@space-arena/shared",
+  "private": true,
+  "type": "module",
+  "version": "0.5.0",
+  "description": "Browser/Node pure deterministic simulation and DataView wire format"
+}

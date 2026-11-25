@@ -109,7 +109,7 @@ export class RoomManager extends EventEmitter {
     this.maxPlayers = maxPlayers;
     this.onRoom = onRoom;
     this.on('error', (error) => console.error('[RoomManager]', error));
-    if (seed) for (const item of presets) this.create({ ...item, maxPlayers });
+    if (seed) for (const item of presets) this.create({ ...item, maxPlayers, persistent: true });
   }
   create(input) {
     if (this.rooms.size >= this.maxRooms) throw new Error('Room limit reached');
@@ -121,10 +121,13 @@ export class RoomManager extends EventEmitter {
       id,
       maxPlayers: Math.min(input.maxPlayers || this.maxPlayers, this.maxPlayers),
     });
+    room.persistent = Boolean(input.persistent);
     this.rooms.set(id, room);
-    room.once('empty', () => {
-      this.rooms.delete(id);
-      this.emit('removed', id);
+    room.on('empty', () => {
+      if (!room.persistent) {
+        this.rooms.delete(id);
+        this.emit('removed', id);
+      }
     });
     this.emit('created', room);
     this.onRoom?.(room);

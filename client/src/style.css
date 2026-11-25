@@ -1376,3 +1376,88 @@ h1 span {
   font-weight: 750;
   font-size: 11px;
 }
+
+/* Lab 05: live netgraph; visible during two-window gameplay. */
+.netgraph-card {
+  border: 1px solid rgba(101, 232, 214, 0.35);
+  border-radius: 13px;
+  background: #0c2130;
+  padding: 15px;
+  margin: 14px 0;
+  color: #d4eff4;
+}
+.netgraph-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #70f2df;
+  font:
+    700 11px ui-monospace,
+    monospace;
+  letter-spacing: 0.08em;
+}
+.netgraph-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin-top: 14px;
+}
+.netgraph-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.netgraph-stats small {
+  color: #86a9ba;
+  letter-spacing: 0.06em;
+  font-size: 10px;
+}
+.netgraph-stats strong {
+  color: #f0fdff;
+  font:
+    600 15px ui-monospace,
+    monospace;
+  overflow-wrap: anywhere;
+}
+.netgraph-track {
+  height: 3px;
+  margin-top: 13px;
+  background: rgba(123, 215, 230, 0.15);
+  border-radius: 6px;
+}
+.netgraph-track span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #ffad79;
+  transition: width 0.15s linear;
+}
+.netgraph-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 13px;
+}
+.netgraph-actions button {
+  color: #062f34;
+  border: 0;
+  border-radius: 7px;
+  background: #72e9d9;
+  padding: 7px 9px;
+  font-weight: 800;
+  cursor: pointer;
+  font-size: 11px;
+}
+.netgraph-actions button:last-child {
+  background: #203b4c;
+  color: #a5cddd;
+  border: 1px solid #3d6170;
+}
+.netgraph-hint {
+  color: #789bad;
+  font:
+    10px/1.6 ui-monospace,
+    monospace;
+  margin: 10px 0 0;
+}
