@@ -24,7 +24,9 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: 'Two real browser contexts: movement + chat'
-        run: npm run test:e2e
+        run: |
+          touch .env
+          npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: always()
         with:
