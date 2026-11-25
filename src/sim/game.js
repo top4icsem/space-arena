@@ -14,8 +14,14 @@ function seededRandomGame(seed) {
 
 /** Enemy is another Ship, not an EnemyShip extends Ship: one inheritance level. */
 export class Game {
-  constructor() {
+  constructor({ roomConfig = {}, eventBus = null } = {}) {
+    this.roomConfig = roomConfig;
+    this.eventBus = eventBus;
     this.reset();
+  }
+
+  notify(type, detail) {
+    this.eventBus?.dispatchEvent(new CustomEvent(type, { detail }));
   }
 
   reset() {
@@ -39,7 +45,8 @@ export class Game {
       [1030, 380, 29, 24, -13, false],
       [175, 590, 22, 42, -8, true],
     ];
-    for (const [x, y, radius, vx, vy, guided] of starters) {
+    const startCount = Math.max(1, Math.min(10, this.roomConfig.asteroidCount ?? 5));
+    for (const [x, y, radius, vx, vy, guided] of starters.slice(0, startCount)) {
       this.world.spawn(
         makeAsteroid({
           position: new Vector2(x, y),
@@ -49,6 +56,7 @@ export class Game {
         }),
       );
     }
+    for (let i = starters.length; i < startCount; i++) this.spawnAsteroid();
     this.world.spawn(makePickup(new Vector2(630, 290)));
   }
 
@@ -124,7 +132,15 @@ export class Game {
     });
     if (Math.abs(difference) < 0.35 && Math.hypot(dx, dy) < 540) {
       const bullet = this.enemy.fire();
-      if (bullet) this.world.spawn(bullet);
+      if (bullet) {
+        this.world.spawn(bullet);
+        this.notify('fired', {
+          team: 'enemy',
+          guided: false,
+          x: bullet.position.x,
+          y: bullet.position.y,
+        });
+      }
     }
     void dt;
   }
@@ -153,12 +169,24 @@ export class Game {
     // Fire is a method call ON the instance: `player.fire()`, never a bare callback.
     if (shooting && this.player?.alive) {
       const bullet = this.player.fire({ guided });
-      if (bullet) this.world.spawn(bullet);
+      if (bullet) {
+        this.world.spawn(bullet);
+        this.notify('fired', {
+          team: 'player',
+          guided,
+          x: bullet.position.x,
+          y: bullet.position.y,
+        });
+      }
     }
 
     const events = this.world.step(dt);
     for (const event of events) {
+      if (event.type === 'ship-hit' || event.type === 'asteroid-hit') {
+        this.notify('hit', { kind: event.target.kind, team: event.target.team ?? null });
+      }
       if (event.type === 'destroyed') {
+        this.notify('exploded', { kind: event.target.kind, team: event.target.team ?? null });
         this.addExplosion(event.target.position, event.target.kind);
         if (event.target.kind === 'asteroid') {
           this.destroyedAsteroids++;
@@ -176,13 +204,15 @@ export class Game {
         }
       } else if (event.type === 'pickup') {
         this.addExplosion(event.source.position, 'pickup');
+        this.notify('collected', { points: event.reward.points });
         if (event.target.team === 'player') this.score += event.reward.points;
       }
     }
 
     this.asteroidTimer += dt;
-    if (this.asteroidTimer >= 3.4) {
-      this.asteroidTimer -= 3.4;
+    const asteroidInterval = Math.max(1, this.roomConfig.asteroidRespawnSeconds ?? 3.4);
+    if (this.asteroidTimer >= asteroidInterval) {
+      this.asteroidTimer -= asteroidInterval;
       if ([...this.world.ofKind('asteroid')].length < 8) this.spawnAsteroid();
     }
     this.pickupTimer += dt;

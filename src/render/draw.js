@@ -95,6 +95,13 @@ function buildBackdrop() {
   return canvas;
 }
 
+/** Each atlas is a row of 96 × 96 transparent sprite cells. */
+function paintSprite(ctx, sheet, frame, size) {
+  if (!sheet) return false;
+  ctx.drawImage(sheet, frame * 96, 0, 96, 96, -size / 2, -size / 2, size, size);
+  return true;
+}
+
 function drawThrust(ctx, timestamp) {
   const flicker = 2 + Math.sin(timestamp / 65) * 3;
   ctx.save();
@@ -115,7 +122,7 @@ function drawThrust(ctx, timestamp) {
   ctx.restore();
 }
 
-function drawOneShip(ctx, x, y, angle, thrusting, timestamp) {
+function drawOneShip(ctx, x, y, angle, thrusting, timestamp, sprites, team = 'player') {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(angle);
@@ -134,6 +141,13 @@ function drawOneShip(ctx, x, y, angle, thrusting, timestamp) {
   ctx.stroke();
 
   if (thrusting) drawThrust(ctx, timestamp);
+  if (sprites?.ships) {
+    ctx.shadowColor = team === 'enemy' ? '#ff7797' : '#55cafa';
+    ctx.shadowBlur = 17;
+    paintSprite(ctx, sprites.ships, team === 'enemy' ? 1 : 0, 79);
+    ctx.restore();
+    return;
+  }
 
   ctx.shadowColor = '#4bc6ff';
   ctx.shadowBlur = 22;
@@ -180,11 +194,18 @@ function drawOneShip(ctx, x, y, angle, thrusting, timestamp) {
   ctx.restore();
 }
 
-function drawAsteroid(ctx, entity, x, y, timestamp) {
+function drawAsteroid(ctx, entity, x, y, timestamp, sprites) {
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(entity.rotation + timestamp * 0.00012 * (entity.guided ? -1 : 1));
   const r = entity.radius;
+  if (sprites?.asteroids) {
+    ctx.shadowColor = entity.guided ? '#ff8165' : '#a8b9d2';
+    ctx.shadowBlur = entity.guided ? 21 : 10;
+    paintSprite(ctx, sprites.asteroids, entity.guided ? 1 : 0, r * 2.45);
+    ctx.restore();
+    return;
+  }
   ctx.shadowColor = entity.guided ? '#ff835c' : '#90aed5';
   ctx.shadowBlur = entity.guided ? 24 : 10;
   const stone = ctx.createLinearGradient(-r, -r, r, r);
@@ -222,7 +243,22 @@ function drawAsteroid(ctx, entity, x, y, timestamp) {
   ctx.restore();
 }
 
-function drawBullet(ctx, entity, x, y) {
+function drawBullet(ctx, entity, x, y, sprites) {
+  if (sprites?.bullets) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(Math.atan2(entity.velocity.y, entity.velocity.x) + Math.PI / 2);
+    ctx.shadowColor = entity.team === 'enemy' ? '#ff8191' : '#80fff2';
+    ctx.shadowBlur = 15;
+    paintSprite(
+      ctx,
+      sprites.bullets,
+      entity.team === 'enemy' ? 2 : entity.guided ? 1 : 0,
+      entity.guided ? 39 : 32,
+    );
+    ctx.restore();
+    return;
+  }
   ctx.save();
   ctx.shadowBlur = entity.guided ? 25 : 15;
   ctx.shadowColor = entity.team === 'enemy' ? '#ff697e' : entity.guided ? '#d6b3ff' : '#82f9f3';
@@ -243,11 +279,18 @@ function drawBullet(ctx, entity, x, y) {
   ctx.restore();
 }
 
-function drawPickup(ctx, x, y, timestamp) {
+function drawPickup(ctx, x, y, timestamp, sprites) {
   ctx.save();
   ctx.translate(x, y);
   const pulse = 1 + Math.sin(timestamp / 230) * 0.14;
   ctx.scale(pulse, pulse);
+  if (sprites?.pickups) {
+    ctx.shadowColor = '#80ffb8';
+    ctx.shadowBlur = 22;
+    paintSprite(ctx, sprites.pickups, 0, 47);
+    ctx.restore();
+    return;
+  }
   ctx.rotate(Math.PI / 4);
   ctx.shadowColor = '#80ffb8';
   ctx.shadowBlur = 26;
@@ -263,7 +306,7 @@ function drawPickup(ctx, x, y, timestamp) {
   ctx.restore();
 }
 
-function drawEntity(ctx, entity, alpha, timestamp) {
+function drawEntity(ctx, entity, alpha, timestamp, sprites) {
   const x = lerpWrapped(entity.previousPosition.x, entity.position.x, alpha, ARENA.width);
   const y = lerpWrapped(entity.previousPosition.y, entity.position.y, alpha, ARENA.height);
   // Border ghost copies preserve continuity on the toroidal playfield.
@@ -276,12 +319,13 @@ function drawEntity(ctx, entity, alpha, timestamp) {
         ctx.save();
         if (entity.invincibleFor > 0)
           ctx.globalAlpha = 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(timestamp / 120));
-        if (entity.team === 'enemy') ctx.filter = 'hue-rotate(148deg) saturate(1.5)';
-        drawOneShip(ctx, px, py, entity.angle, entity.thrusting, timestamp);
+        if (entity.team === 'enemy' && !sprites?.ships)
+          ctx.filter = 'hue-rotate(148deg) saturate(1.5)';
+        drawOneShip(ctx, px, py, entity.angle, entity.thrusting, timestamp, sprites, entity.team);
         ctx.restore();
-      } else if (entity.kind === 'asteroid') drawAsteroid(ctx, entity, px, py, timestamp);
-      else if (entity.kind === 'bullet') drawBullet(ctx, entity, px, py);
-      else if (entity.kind === 'pickup') drawPickup(ctx, px, py, timestamp);
+      } else if (entity.kind === 'asteroid') drawAsteroid(ctx, entity, px, py, timestamp, sprites);
+      else if (entity.kind === 'bullet') drawBullet(ctx, entity, px, py, sprites);
+      else if (entity.kind === 'pickup') drawPickup(ctx, px, py, timestamp, sprites);
       else if (entity.kind === 'particle') {
         ctx.save();
         ctx.globalAlpha = entity.ttl.fraction;
@@ -297,7 +341,7 @@ function drawEntity(ctx, entity, alpha, timestamp) {
   }
 }
 
-export function createRenderer(surface) {
+export function createRenderer(surface, { sprites = {} } = {}) {
   const backdrop = buildBackdrop();
   const { ctx } = surface;
 
@@ -308,15 +352,24 @@ export function createRenderer(surface) {
       if (world) {
         // Render the world snapshot rather than reimplementing the simulation in Canvas.
         for (const entity of world) {
-          if (entity.kind !== 'ship') drawEntity(ctx, entity, alpha, timestamp);
+          if (entity.kind !== 'ship') drawEntity(ctx, entity, alpha, timestamp, sprites);
         }
-        for (const entity of world.ofKind('ship')) drawEntity(ctx, entity, alpha, timestamp);
+        for (const entity of world.ofKind('ship'))
+          drawEntity(ctx, entity, alpha, timestamp, sprites);
       } else {
         // Lab 01 controlled benchmarking remains available at ?autothrust=1.
         const ship = interpolateShip(previous, current, alpha);
         for (const dx of [-ARENA.width, 0, ARENA.width]) {
           for (const dy of [-ARENA.height, 0, ARENA.height]) {
-            drawOneShip(ctx, ship.x + dx, ship.y + dy, ship.angle, ship.thrusting, timestamp);
+            drawOneShip(
+              ctx,
+              ship.x + dx,
+              ship.y + dy,
+              ship.angle,
+              ship.thrusting,
+              timestamp,
+              sprites,
+            );
           }
         }
       }

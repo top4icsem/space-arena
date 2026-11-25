@@ -1,9 +1,9 @@
 {
   "name": "space-arena",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Space Arena: lab 02 entity model, ship combat, pickups and homing",
+  "description": "Space Arena: lab 03 async asset pipeline, sprites, Web Audio, EventTarget lobby",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",

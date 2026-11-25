@@ -2,3 +2,4 @@ node_modules
 dist
 coverage
 package-lock.json
+public/assets/data/broken.json

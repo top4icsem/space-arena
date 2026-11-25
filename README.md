@@ -1,156 +1,285 @@
-# SPACE ARENA — Lab 02: Objects, Prototypes & `this` (Entity Model)
+# SPACE ARENA — Lab 03: Async JavaScript, Assets & Lobby
 
-> **Продовження лабораторної №1 в тому самому Git-репозиторії.** Збережено вихідний Canvas-дизайн, фіксований цикл із кроком `1/60`, фізику польоту, керування, експерименти та тести ЛР №1. Додано бойову арену з класами, сутностями і композицією. **Це все ще локальна однокористувацька гра**, а не готовий мультиплеєр.
+> **Лабораторна №3 — продовження тієї самої Space Arena з ЛР №1–2.** Fixed-step game loop, `Ship extends Entity`, `World`/`Map`, кулі, TTL, колізії, респаун, pickup і homing не вилучено. Додано асинхронне завантаження, PNG-спрайти, Web Audio, події та лобі. У ЛР №3 кімнати — статичний список, **мережевого мультиплеєра поки немає** (це ЛР №4–5).
 
-![Space Arena — Lab 02 running combat HUD and gameplay](docs/preview-lab-02.png)
+![Space Arena Lab 03: Canvas loading](docs/preview-lab-03-loading.png)
 
-## 1. Запуск (Node.js 22+, npm)
+![Space Arena Lab 03: Lobby](docs/preview-lab-03.png)
+
+## 1. Як запустити й показати викладачу
+
+Потрібен **Node.js 22+**. Працюйте в **тому самому публічному GitHub-репозиторії**, не створюйте новий.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Відкрийте URL, який виведе Vite, зазвичай `http://localhost:5173`. Не запускайте `index.html` просто подвійним кліком: тут використовуються ES-модулі та Vite.
+Відкрийте адресу Vite (зазвичай `http://localhost:5173/`). Правильний сценарій:
+
+1. На **Canvas** з'являється реальний progress bar `0/8 → 8/8`; одночасно завантажуються 4 PNG, 3 WAV і 1 JSON.
+2. Лише після `await loadAll(manifest)` з'являється **Lobby**; воно читає `GET /api/rooms` зі статичного файлу `public/api/rooms`, оновлює список кожні 5 с.
+3. Введіть callsign, оберіть `Orion Belt`, `Nebula Run` або `Zenith Drift`; натисніть **Join Mission** — тільки тоді створюється `Game` і починається ігровий цикл. Вибір кімнати змінює кількість/частоту астероїдів.
+4. Керуйте кораблем, стріляйте (`Space`), знищуйте астероїди; почуєте **Web Audio** (після дії Join). Перевірте `Shift + Space` (homing), зелений pickup, HP, бали й 2-секундний респаун.
+5. **Lobby** під Canvas повертає до списку кімнат; коли гравець покинув лобі, `setInterval` скасовується й запит переривається.
+
+| Керування               | Результат                         |
+| ----------------------- | --------------------------------- |
+| `W` / `↑`, `S` / `↓`    | Розгін / гальмо                   |
+| `A` / `←`, `D` / `→`    | Поворот                           |
+| `Space`                 | Постріл із носа корабля зі звуком |
+| `Shift + Space`         | Самонавідні кулі                  |
+| `P`, `R`                | Пауза / перезапуск                |
+| `Sound on/off`, `Lobby` | Звук / повернення до лобі         |
+
+![Space Arena Lab 03: sprite gameplay](docs/preview-lab-03-game.png)
+
+**Контроль якості (перед здачею):**
 
 ```bash
 npm run format
-npm run check          # lint + format:check + 36 тестів + production build
+npm run check  # eslint + prettier check + всі тести + Vite production build
+# або окремо:
+npm test
+npm run build
 ```
 
-Тести окремо: `npm test`. Збірка: `npm run build`. Якщо немає Node.js — встановіть [Node.js](https://nodejs.org/) версії 22 або новішої.
+> `index.html` не запускайте подвійним кліком через `file://`: `fetch`, ESM і шлях `/api/rooms` потребують локального Vite-сервера.
 
-### Керування
-
-| Клавіша                 | Дія                          |
-| ----------------------- | ---------------------------- |
-| `W` / `↑`               | Прискорення вперед           |
-| `A` / `←`, `D` / `→`    | Повороти                     |
-| `S` / `↓`               | Гальмування                  |
-| `Space` (можна тримати) | Звичайні кулі з носа корабля |
-| `Shift + Space`         | Самонавідні кулі (фіолетові) |
-| `P`                     | Пауза / відновлення          |
-| `R`                     | Нова гра / скидання рахунку  |
-
-**Цілі демонстрації:** сірі астероїди — звичайні, помаранчевий астероїд — самонавідний, червоний корабель — суперник, зелений хрест у ромбі — **pickup** (лікує до 3 HP і дає +25 очок). За знищений звичайною/самонавідною кулею астероїд дається +50; за ворожий корабель +200. Після знищення корабля гравець з'являється **через 2 секунди**, з повним здоров'ям. Є частинки вибухів, TTL куль, лічильники HUD і періодичне додавання астероїдів/pickup. Зіткнення працюють також через краї арени (wrap-around).
-
-## 2. Структура проєкту
+## 2. Структура змін — збережено основу ЛР №1–2
 
 ```text
-space-arena/
-├── .git/                     # попередня історія і тег lab-01 + локальний lab-02
-├── index.html                # той самий інтерфейс + combat HUD
+space-arena/                      ← ТОЙ САМИЙ репозиторій
+├── index.html                    ← overlays для loading errors і lobby
+├── public/
+│   ├── api/rooms                 ← GET /api/rooms, статична відповідь до ЛР №4
+│   └── assets/
+│       ├── manifest.json        ← 8 записів: sprites/audio/json
+│       ├── sprites/             ← ships, asteroids, bullets, pickups (PNG atlases)
+│       ├── audio/               ← fire, hit, explosion (WAV)
+│       └── data/                ← arena.json, broken.json (демо)
 ├── src/
-│   ├── main.js               # взаємодія з DOM, Canvas і циклом
-│   ├── loop.js               # той самий fixed-step requestAnimationFrame з ЛР №1
-│   ├── input.js              # керування, Set клавіш
-│   ├── style.css
-│   ├── sim/
-│   │   ├── vector2.js        # immutable Vector2 (pure add/subtract/scale...)
-│   │   ├── entity.js         # Entity + private static #id
-│   │   ├── ship-class.js     # Ship extends Entity, private #hp, fire()
-│   │   ├── world.js          # Map, spawn/despawn/sweep, ofKind(), step()
-│   │   ├── behaviors.js      # композиція: ttl, homing, collectible
-│   │   ├── factories.js      # створення bullet/asteroid/pickup/particle
-│   │   ├── collisions.js     # система колізій коло-коло, O(n²)
-│   │   ├── game.js           # правила гри, бали, респаун, ворог, генерація
-│   │   ├── ship.js           # фізика integrate() з ЛР №1 — збережена
-│   │   └── arena.js          # координати та wrap-around з ЛР №1
-│   └── render/
-│       ├── draw.js           # кораблі, кулі, астероїди, pickup, частинки
-│       ├── interpolate.js   # інтерполяція з ЛР №1
-│       └── canvas.js         # DPR із ЛР №1
-├── tests/                    # 19 попередніх + 17 нових Node.js тестів
+│   ├── main.js                  ← async boot + Join + wiring + збережена фізика
+│   ├── assets/loader.js         ← fetchJson, retry, loadImage/Audio/Json, loadAll
+│   ├── assets/failure-demo.js   ← 4 сценарії відмови (тільки query parameter)
+│   ├── lobby/lobby.js           ← class Lobby extends EventTarget + poll + async iterator
+│   ├── lobby/view.js            ← DOM, вибір кімнати, callsign, кнопки
+│   ├── audio/audio.js           ← Web Audio event subscribers
+│   ├── ui/loading.js            ← графічний Canvas progress bar
+│   ├── sim/game.js              ← старий Game + ін'єкція eventBus/roomConfig
+│   ├── render/draw.js           ← старий Canvas renderer + drawImage(frame, sprite)
+│   ├── input.js, loop.js        ← без змін із попередніх лабораторних
+│   └── sim/інші...              ← Entity, World, вектори, поведінки, колізії
+├── tests/                       ← 36 попередніх + 11 нових = 47 тестів
 └── docs/
-    ├── lab-01-readme.md      # власна доопрацьована версія README з ЛР №1
-    ├── reflection-lab-02.md  # відповіді на 3+ питання для захисту
-    ├── this-prototype-lab-02.md # приклади 4 правил this і прототипів
-    ├── defense-lab-02.md     # сценарій п'ятихвилинного захисту
-    ├── experiments.md       # експерименти ЛР №1, не вилучені
-    └── reflection.md        # рефлексія ЛР №1, не вилучена
+    ├── lab-01-readme.md         ← попередній README першої ЛР
+    ├── lab-02-readme.md         ← попередній README другої ЛР
+    ├── failure-gallery-lab-03.png
+    ├── failure-gallery-lab-03.md
+    ├── reflection-lab-03.md
+    └── defense-lab-03.md
 ```
 
-## 3. Об'єкти, прототипи та інкапсуляція
+**Інваріанти:** `src/sim/*` не імпортує DOM, renderer або `audio.js`. Клас `Game` приймає `eventBus: EventTarget` через конструктор і повідомляє `CustomEvent('fired' | 'hit' | 'exploded')`; `audio.js` слухає ці події. Кораблі, кулі й астероїди в робочому renderer малюються через `ctx.drawImage` з **реальних PNG-спрайтшитів** (96×96 на кадр), а не замінені на телефонні картинки або окремі CSS-фігури. За відсутності ресурсів гра не стартує.
 
-**`Vector2`**: кожна дія (`add`, `subtract`, `scale`, `normalized`, `rotated`, `distanceTo`) повертає нове значення, аргументи не змінюються; `Object.freeze(this)` захищає координати вектора. У `Entity` зберігаються `id`, `position: Vector2`, `velocity: Vector2`, `radius`, `kind`, `team`, `alive`, `behaviors`, метод `update(dt, world)`. `Entity.#id` — **приватний статичний лічильник**; ID видається в конструкторі і не повторюється. `Ship extends Entity` — **єдиний рівень наслідування**. Здоров'я `Ship.#hp` заховане від зовнішнього коду, але доступне читання через `get hp()`. Метод `damage()` керовано змінює HP. І ворог, і гравець є екземплярами `Ship` (ніякого `EnemyShip extends Ship`).
+## 3. Пайплайн assets: Promises / await / AbortSignal
 
-### `World`, `Map` і відкладене видалення
+`public/assets/manifest.json` містить `{ id, type, url }`. `fetchResponse` перевіряє `response.ok` й кидає `HttpError` для 4xx/5xx, `fetchJson` після цього виконує `.json()` і передає `SyntaxError` угору. `loadImage` використовує `fetch → blob → createImageBitmap`, `loadAudio` — `fetch → arrayBuffer → OfflineAudioContext.decodeAudioData`, `loadJson` — спільний `fetchJson`. Всі отримують `AbortSignal`. Звуковий `AudioContext` створюється **після user gesture**, під час натискання Join, а не в `boot`.
 
-`World.entities` — `Map<id, Entity>`: `spawn(entity)` додає, `despawn(entityOrId)` лише ставить `alive = false`, а `sweep()` видаляє після кроку. Всі сутності можна перебирати циклом `for (const e of world)`; `*ofKind(kind)` — **генератор**, повертає тільки живі сутності зазначеного виду. `World.step(dt)` викликає `update()` на знімку живих сутностей, запускає окрему систему колізій та виконує `sweep()`. Завдяки знімку додані під час кроку об'єкти не отримують несподіване друге оновлення.
-
-### `this`: баг, виправлення, альтернативи
-
-У звичайному методі `Ship.fire()` використовуються `this.position`, `this.velocity`, `this.angle`, `this.fireCooldown`. **Помилка:**
+`withRetry` робить максимум **3 спроби** з backoff `180ms, 360ms + jitter 0–35%`; 4xx, parse error і явний Abort **не повторюються**, 5xx/мережеві помилки/таймаути можуть повторюватися. Кожна спроба має власний `AbortSignal.timeout`; зовнішній abort відміняє весь ланцюжок.
 
 ```js
-const fire = ship.fire;
-fire(); // TypeError: втрачений this в ES module / strict mode
-window.addEventListener('keydown', ship.fire); // this === window, а не ship
+const manifest = await fetchJson('/assets/manifest.json', { signal });
+const assets = await loadAll(manifest, {
+  signal,
+  onProgress: ({ completed, total, file }) => drawLoading(surface, { completed, total, file }),
+});
+// Promise.all виконується всередині loadAll, після await ресурси вже готові.
+// Після цього: renderer із PNG, лобі, Join, а лише потім Game + loop.start().
 ```
 
-**Правильно використано у грі:** `const bullet = game.player.fire({ guided: true });` — метод викликається через екземпляр. Для передавання в listener:
+`Promise.all` відхиляється, якщо будь-який критичний ресурс не завантажився; цей exception перехоплює `boot()`, скасовує інші запити й показує Retry. Прогрес показує кількість **успішно завершених файлів**, а не вигаданий відсоток; при одночасній роботі порядок завершення не зобов'язаний збігатися з manifest.
+
+### Вимірювання: sequential `await` vs concurrent `Promise.all`
+
+Функція `measureLoading` проходить ті самі 8 файлів спочатку послідовно (`for ... await`), потім паралельно (`loadAll`). **Три фактичні заміри у headless Chromium**, де всі файлові `fetch` підмінено однаковим локальним тестовим адаптером з **20 мс штучної затримки на запит**; декодування PNG/WAV лишилося браузерним. Це **не** заявлені вимірювання Vite на Mac — повторіть їх на своєму комп'ютері.
+
+| Спроба | Sequential await | Concurrent Promise.all | Прискорення |
+| ------ | ---------------: | ---------------------: | ----------: |
+| 1      |         177.6 мс |                45.4 мс |        3.9× |
+| 2      |         176.8 мс |                30.2 мс |        5.9× |
+| 3      |         178.5 мс |                33.4 мс |        5.3× |
+
+**Чому:** послідовний `await` чекає файл N до старту N+1, а `Promise.all` ставить усі `fetch` у роботу одразу. Швидкість залежить від кешу, браузера, мережі та декодера; паралельність **не створює додатковий JS-потік**, а overlapping I/O і роботу асинхронних API.
+
+Власний вимір у Chrome DevTools Console (після завантаження лобі):
 
 ```js
-const fireBound = ship.fire.bind(ship); // зв'язаний this
-window.addEventListener('keydown', fireBound); // прибрати пізніше: removeEventListener
-// Або замикання / стрілка, яка захоплює змінну ship:
-const onFire = (event) => {
-  if (event.code === 'Space') ship.fire();
-};
-window.addEventListener('keydown', onFire);
-// Або для негайного виклику: ship.fire.call(ship, { guided: false });
-//                             ship.fire.apply(ship, [{ guided: true }]);
+window.__spaceArenaDebug.compareAssetLoading().then(console.table);
 ```
 
-**Чотири правила `this`:** (1) `new Fn()` → новий об'єкт; (2) `fn.call(obj)` / `.apply(obj)` / `.bind(obj)` → явне прив'язування; (3) `obj.fn()` → об'єкт зліва від крапки; (4) звичайний `fn()` → `undefined` у strict mode (або глобальний об'єкт поза ним). Вони перелічені у порядку пріоритету. **Стрілкова функція** не має власного `this` і бере його з лексичного оточення; у `()=>ship.fire()` ми також явно викликаємо метод екземпляра. Покроковий консольний експеримент — [docs/this-prototype-lab-02.md](docs/this-prototype-lab-02.md).
+## 4. П'ять власних головоломок: task, microtask, rAF
 
-**Прототипний ланцюжок (ОДИН експеримент):**
+Приклади запускати **окремо** у браузерній Console. В усіх є `await`, `setTimeout` **усередині `.then`** та `requestAnimationFrame`; вихід збудований так, щоб між timer і rAF не було неозначеної гонки (rAF реєструється всередині timer). `await` відновлює async-функцію як microtask; `.then` теж microtask; `setTimeout` — task; rAF — перед наступним paint.
+
+**Головоломка 1 — один `await`:**
 
 ```js
-const ship = new Ship(); // у Node: імпорт із './src/sim/ship-class.js'
-Object.getPrototypeOf(ship) === Ship.prototype; // true
-Object.getPrototypeOf(Ship.prototype) === Entity.prototype; // true
-Object.getPrototypeOf(Entity.prototype) === Object.prototype; // true
+async function a() {
+  console.log('A1');
+  await Promise.resolve();
+  console.log('A3');
+  Promise.resolve().then(() => {
+    console.log('A4');
+    setTimeout(() => {
+      console.log('A5');
+      requestAnimationFrame(() => console.log('A6'));
+    }, 0);
+  });
+}
+a();
+console.log('A2');
+// Вивід: A1 A2 A3 A4 A5 A6
 ```
 
-## 4. Дизайн-запис: чому композиція, а не дерево класів (коротко)
+Пояснення: синхронні A1/A2 перед continuation `await` A3, потім `.then` A4, таймер A5, rAF A6.
 
-**Як могла б виглядати погана ієрархія:** `Entity → MovingEntity → Enemy → Asteroid → HomingAsteroid`; окремо `Entity → Projectile → HomingBullet` і `Entity → Item → HealingPickup`. Насправді самонаведення потрібне і кулі, і астероїду, хоча це зовсім різні типи. Pickup має бути нерухомим, збиратися при дотику, але не бути «кораблем» або «підкласом ворога». Глибоке дерево дублювало б наведення й породжувало б суперечливі типи.
+**Головоломка 2 — `.then` ставиться у чергу раніше, ніж `await`:**
 
-**Наш вибір:** `Entity`, від нього **тільки** `Ship extends Entity`; для кулі/астероїда/pickup/частинок фабрики створюють звичайні `Entity` з потрібним `kind` і **масивом здібностей** (`behaviors`). `homing({ target, speed, turnRate })` додається до кулі **і** астероїда; `ttl(seconds)` — до кулі та частинок; `collectible(onCollect)` — до pickup. Всі використовують один контракт `behavior.update(entity, dt, world)` і не вимагають нового `extends`. Колізія перевіряє `kind` / здатність collectible; pickup нерухомий (`velocity = (0,0)`) й не є `Ship`. Переваги: повторне використання, просте тестування, незалежні ознаки, можливість комбінувати. Ціна: `kind`/контракти поведінки треба узгоджувати; типи не гарантуються компілятором у чистому JS.
+```js
+Promise.resolve().then(() => {
+  console.log('B3');
+  setTimeout(() => {
+    console.log('B5');
+    requestAnimationFrame(() => console.log('B6'));
+  }, 0);
+});
+async function b() {
+  console.log('B1');
+  await 0;
+  console.log('B4');
+}
+b();
+console.log('B2');
+// Вивід: B1 B2 B3 B4 B5 B6
+```
 
-## 5. Колізії, TTL, респаун і HUD
+Пояснення: B3 уже стоїть у черзі microtasks перед B4, але сам виклик async-функції виконує B1 синхронно.
 
-- `circlesOverlap()` у `collisions.js` порівнює квадрати відстаней з урахуванням переходу через край. `resolveCollisions()` — O(n²), достатньо для десятків об'єктів; частинки не перевіряються.
-- Bullet має TTL 2,1 с (guided 3,4 с). При зіткненні з астероїдом/чужим кораблем гине куля; у астероїда є `durability`, у корабля `#hp` та невеликий захист після удару.
-- `Game` розбирає події з `World.step`: на `destroyed` створює 17 частинок, оновлює `score`, запускає двосекундний респаун гравця; суперник повертається через 4 с. `R` скидає симуляцію.
-- HUD показує `score`, HP, кількість куль/астероїдів, таймер респауну, швидкість, курс, координати, FPS і кроки/с. Задній фон та інтерполяція Canvas збережені.
-- Збережені режими ЛР №1: `?experiment=block`, `?experiment=interval`, `?experiment=variable`, `?autothrust=1` (останній **вимикає бойову арену** і запускає старий контрольований 5-секундний політ).
+**Головоломка 3 — два `await` віддають чергу іншим microtasks:**
 
-## 6. Перевірка і здача
+```js
+async function c() {
+  console.log('C1');
+  await 0;
+  console.log('C3');
+  await 0;
+  console.log('C5');
+}
+c();
+Promise.resolve().then(() => {
+  console.log('C4');
+  setTimeout(() => {
+    console.log('C6');
+    requestAnimationFrame(() => console.log('C7'));
+  }, 0);
+});
+console.log('C2');
+// Вивід: C1 C2 C3 C4 C5 C6 C7
+```
 
-**Перевірено в робочому середовищі:** `node --test tests/*.test.js` — **36/36 passed**, включно з 19 попередніми тестами ЛР №1. `npm install` тут не зміг завершитися через недоступність npm registry; тому результат `npm run lint`, `npm run format:check` і `npm run build` треба перевірити **локально після інсталяції пакетів**. Не видаємо це за пройдену збірку. Команди вище для цього і наведені.
+Пояснення: після C3 другий `await` ставить C5 у хвіст microtask queue, поступаючись уже запланованому C4.
 
-**Увага:** архів містить Git-історію з `lab-01` і підготовлений локальний тег `lab-02` (якщо він створений у цій копії). **Ніякого автоматичного завантаження в GitHub не відбувається:** для здачі треба перевірити remote та виконати push у СВІЙ попередній публічний репозиторій. [Покрокова інструкція](ЯК_ЗДАТИ_ЛР2.md).
+**Головоломка 4 — `reject` переходить у `catch` після microtask:**
+
+```js
+async function d() {
+  console.log('D1');
+  try {
+    await Promise.reject(new Error('fail'));
+  } catch {
+    console.log('D3');
+    await 0;
+  }
+  console.log('D5');
+}
+d();
+Promise.resolve().then(() => {
+  console.log('D4');
+  setTimeout(() => {
+    console.log('D6');
+    requestAnimationFrame(() => console.log('D7'));
+  }, 0);
+});
+console.log('D2');
+// Вивід: D1 D2 D3 D4 D5 D6 D7
+```
+
+Пояснення: rejection відновлює `catch` як microtask D3, а `await` у `catch` дає виконатися D4 раніше за D5.
+
+**Головоломка 5 — `await` усередині таймера:**
+
+```js
+console.log('E1');
+Promise.resolve().then(() => {
+  console.log('E3');
+  setTimeout(async () => {
+    console.log('E5');
+    await Promise.resolve();
+    console.log('E6');
+    requestAnimationFrame(() => console.log('E7'));
+  }, 0);
+});
+(async () => {
+  await 0;
+  console.log('E4');
+})();
+console.log('E2');
+// Вивід: E1 E2 E3 E4 E5 E6 E7
+```
+
+Пояснення: E3/E4 — microtasks поточного завдання; E5 — новий timer task; E6 — microtask після `await` таймера; E7 — rAF.
+
+**Три стани Promise:** `pending`, `fulfilled`, `rejected`. `.then` створює новий Promise, `throw` відхиляє downstream Promise, `.catch` або `try/catch` його обробляє. Колбек, Promise `.then` і `await` — різні інтерфейси одного асинхронного процесу; `await` не блокує браузерний event loop.
+
+Комбінатори: `Promise.all` — усі успішні або перша помилка; `Promise.allSettled` — результати кожного, включно з rejected; `Promise.race` — результат першого завершеного (лобі використовує у async iterator); `Promise.any` — перший **успішний** або `AggregateError`, якщо всі відхилені. Мініприклади див. `docs/async-combinators-lab-03.md`.
+
+## 5. Галерея збоїв — не падаємо, кнопка Retry
+
+![Four real browser failure screenshots](docs/failure-gallery-lab-03.png)
+
+У Vite відкрийте посилання по одному: `/?failure=404`, `/?failure=timeout`, `/?failure=abort`, `/?failure=json`. В кожному випадку є помилка на Canvas/overlay та **Retry loading**, яка прибирає demo-параметр і без перезавантаження вкладки виконує нормальний `boot()` → лобі. Не треба видаляти реальні файли з проєкту.
+
+| Сценарій           | Механізм                                            | Очікувана реакція                            |
+| ------------------ | --------------------------------------------------- | -------------------------------------------- |
+| `?failure=404`     | Підміна URL `ships.png` на неіснуючий               | `HttpError 404`, **немає ретраю 4xx**, Retry |
+| `?failure=timeout` | Невідповідний `fetch` + timeout 350 мс/спроба       | `TimeoutError` після 3 спроб, Retry          |
+| `?failure=abort`   | `AbortController.abort()` на 280 мс під час запитів | `AbortError`, без ретраю, Retry              |
+| `?failure=json`    | Неповний `broken.json`                              | `SyntaxError` на `.json()`, Retry            |
+
+Власний smoke-test у headless Chromium виконав кожен збій та натискання Retry: **4/4 повернулися до лобі з 3 кімнатами, без uncaught JavaScript errors**. Browser harness подав ті самі ESM/HTML/CSS і бінарні ресурси через локальний test adapter, **не Vite HTTP navigation**. Повний сценарій захисту — `docs/failure-gallery-lab-03.md`.
+
+## 6. Lobby, EventTarget, Web Audio
+
+`Lobby extends EventTarget` відповідає лише за модель (`rooms`, `join`, `refresh`, `start`, `stop`) та `CustomEvent('rooms' | 'roomerror' | 'join')`. UI в `src/lobby/view.js`; кнопки та список кімнат не в класі Lobby. Коли лобі видиме, `setInterval` викликає асинхронний `refresh()` раз на 5 с. На кожен запит використовується `AbortSignal.any([controller.signal, AbortSignal.timeout(2400)])`; `stop()` перериває незавершений fetch, прибирає timer і запобігає оновленню UI старою відповіддю через `generation`. `async *updates` повертає зміни, а `main.js` читає їх через **`for await (... of ...)`**.
+
+Після натискання Join `audio.unlock()` створює/відновлює справжній `AudioContext`, а до цього `loadAudio` лише декодує у `OfflineAudioContext` (без autoplay). Підписки на `fired`, `hit`, `exploded` знаходяться в `src/audio/audio.js`, а `src/sim/game.js` лише надсилає події в передану шину, не імпортуючи звук/HUD.
+
+## 7. Захист і GitHub
+
+**П'ятихвилинний показ:** loading bar → lobby з трьома кімнатами → Join → постріл зі звуком і sprites → коротко Promise.all/retry/AbortController/EventTarget → 2–3 відповіді з `docs/reflection-lab-03.md` (сценарій `docs/defense-lab-03.md`).
+
+Переконайтесь, що локальна гілка вже підключена до існуючого `origin` і не містить невідправлених змін інших людей:
 
 ```bash
-git log --oneline -3
-git tag -l             # lab-01 і lab-02
-git remote -v          # перевірити підключення до GitHub
-npm install
-npm run format
-npm run check
+git status
 git add .
-git commit -m "Finalize Lab 02 after local verification"  # лише якщо є зміни
-# Якщо ви змінили код після створення lab-02, перенесіть тег на новий коміт:
-git tag -f lab-02
-git push -u origin main
-git push origin lab-01
-git push origin lab-02        # якщо тег уже був на remote: git push --force origin lab-02
+git commit -m "Lab 03: async assets, loading screen, lobby and Web Audio"
+git tag lab-03
+git push origin main
+git push origin lab-03
 ```
 
-**Захист 5 хв:** показати `Ship` → стрільбу → знищення астероїда/ворога → зелений pickup → homing `Shift+Space` → HP/респаун, а потім у коді `Vector2`, `Entity`, `World`, `behaviors.js`, `collisions.js`. [Готовий порядок виступу](docs/defense-lab-02.md); [Reflection](docs/reflection-lab-02.md).
+Здається **той самий репозиторій**: `https://github.com/top4icsem/space-arena`, з окремими тегами `lab-01`, `lab-02`, `lab-03`. Для інструкції копіювання файлів з ZIP поверх наявної папки див. `ЯК_ДОДАТИ_ЛР3.md`. **Не копіюйте чужу `.git` і не створюйте новий `git init`.**
 
-### Спадкоємність з ЛР №1
-
-Перший етап НЕ переписаний з нуля: `src/loop.js`, `src/input.js`, `src/sim/ship.js`, `src/sim/arena.js`, `src/render/canvas.js`, `src/render/interpolate.js` залишені як базові модулі; файл `docs/lab-01-readme.md` зберігає ваш власний оновлений опис першої лабораторної з реальними вимірами на MacBook Air. Тег `lab-01` дає змогу окремо перевірити стан гри до бойової системи.
+**Статус перевірки в середовищі створення:** 47/47 Node tests; браузерний smoke-test ESM/DOM/Canvas/PNG/WAV/lobby/fire; 4/4 recoverable failures. npm registry тут недоступний, тому `npm run lint`, `npm run format:check` і Vite `npm run build` потрібно виконати на своєму Mac перед пушем; цей README не стверджує, що вони вже пройшли.

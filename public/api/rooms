@@ -1,0 +1,8 @@
+{
+  "rooms": [
+    { "id": "orion", "name": "Orion Belt", "players": 3, "maxPlayers": 8, "asteroidCount": 5, "asteroidRespawnSeconds": 3.4, "description": "Balanced dogfight · standard hazards" },
+    { "id": "nebula", "name": "Nebula Run", "players": 5, "maxPlayers": 8, "asteroidCount": 7, "asteroidRespawnSeconds": 2.3, "description": "Dense rocks · faster reinforcements" },
+    { "id": "zenith", "name": "Zenith Drift", "players": 1, "maxPlayers": 8, "asteroidCount": 3, "asteroidRespawnSeconds": 5.2, "description": "Open skies · fewer asteroids" }
+  ],
+  "note": "Lab 03 static lobby fixture. Lab 04 replaces this endpoint with a live HTTP server."
+}

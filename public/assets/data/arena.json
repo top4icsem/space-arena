@@ -1,0 +1,6 @@
+{
+  "name": "Space Arena",
+  "version": 3,
+  "supportedModes": ["local-dogfight", "guided-bullets", "pickup"],
+  "spriteFrameSize": 96
+}

@@ -5,6 +5,12 @@ import { createInput } from './input.js';
 import { createLoop } from './loop.js';
 import { createCanvasSurface } from './render/canvas.js';
 import { createRenderer } from './render/draw.js';
+import { fetchJson, loadAll, measureLoading } from './assets/loader.js';
+import { faultOptions, faultManifest } from './assets/failure-demo.js';
+import { createAudioController } from './audio/audio.js';
+import { Lobby } from './lobby/lobby.js';
+import { createLobbyView } from './lobby/view.js';
+import { drawLoading, drawLoadError } from './ui/loading.js';
 
 const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(window.location.search);
@@ -12,20 +18,52 @@ const experiment = ['block', 'interval', 'variable'].includes(params.get('experi
   ? params.get('experiment')
   : null;
 const autoThrust = params.get('autothrust') === '1';
+let failureMode = params.get('failure');
 const canvas = $('#arena');
 const surface = createCanvasSurface(canvas);
-const renderer = createRenderer(surface);
 const input = createInput();
-let game = new Game();
-let current = autoThrust ? createShip(ARENA.width / 2, ARENA.height / 2) : game.playerState;
+const eventBus = new EventTarget();
+const audio = createAudioController(eventBus);
+const lobby = new Lobby();
+let game = null;
+let renderer = null;
+let manifest = null;
+let resources = null;
+let activeRoom = null;
+let pilotName = '';
+let phase = 'loading';
+let loadingController = null;
+let watcherController = null;
+let current = createShip(ARENA.width / 2, ARENA.height / 2);
 let previous = { ...current };
 let simulatedSeconds = 0;
 let benchmarkComplete = false;
 let paused = false;
 let lastHudUpdate = 0;
 
+const lobbyView = createLobbyView($('#lobby-overlay'), {
+  onJoin: (name, roomId) => {
+    // AudioContext is created DIRECTLY in a real user gesture, not during loading.
+    audio.unlock();
+    try {
+      lobby.join(name, roomId);
+    } catch (error) {
+      lobbyView.error(error.message);
+    }
+  },
+  onRetry: () => {
+    void lobby.refresh();
+  },
+  onSound: () => {
+    audio.setMuted(!audio.muted);
+    $('#sound-toggle').textContent = `♪ SOUND: ${audio.muted ? 'OFF' : 'ON'}`;
+    $('#mute-button').lastElementChild.textContent = audio.muted ? 'Sound off' : 'Sound on';
+  },
+});
+
 function resetSimulation() {
-  game = new Game();
+  if (phase !== 'playing') return;
+  game = new Game({ roomConfig: activeRoom, eventBus });
   current = autoThrust ? createShip(ARENA.width / 2, ARENA.height / 2) : game.playerState;
   previous = { ...current };
   simulatedSeconds = 0;
@@ -36,11 +74,11 @@ function resetSimulation() {
 }
 
 function simulate(dt) {
+  if (phase !== 'playing') return;
   if (autoThrust && benchmarkComplete) return;
   if (input.justPressed('KeyR') && !autoThrust) resetSimulation();
   previous = { ...current };
   if (autoThrust) {
-    // Original Lab 01 benchmark is unchanged by combat and random encounters.
     const actualDt = Math.min(dt, Math.max(0, 5 - simulatedSeconds));
     current = wrapShip(
       integrate(
@@ -59,10 +97,10 @@ function simulate(dt) {
         y: Number(current.y.toFixed(4)),
         velocity: Number(Math.hypot(current.vx, current.vy).toFixed(4)),
       };
-      console.info('[SPACE ARENA] 5-second controlled thrust benchmark', result);
+      console.info('[SPACE ARENA] Lab 01 5-second benchmark', result);
       $('#experiment-alert').hidden = false;
       $('#experiment-alert').textContent =
-        `5.00s benchmark finished: x=${result.x}, y=${result.y}, speed=${result.velocity}. See console.`;
+        `5.00s benchmark: x=${result.x}, y=${result.y}, speed=${result.velocity}.`;
     }
   } else {
     game.simulate(dt, input.snapshot(), {
@@ -75,6 +113,7 @@ function simulate(dt) {
 }
 
 function updateFlightTelemetry() {
+  if (phase !== 'playing') return;
   const speed = Math.hypot(current.vx, current.vy);
   const headingDeg = ((((current.angle * 180) / Math.PI) % 360) + 360) % 360;
   $('#speed').textContent = Math.round(speed);
@@ -89,7 +128,7 @@ function updateFlightTelemetry() {
   for (const key of ['w', 'a', 's', 'd']) {
     $(`#key-${key}`).classList.toggle('pressed', input.isDown(`Key${key.toUpperCase()}`));
   }
-  if (!autoThrust) {
+  if (!autoThrust && game) {
     const hud = game.hud;
     $('#score').textContent = hud.score.toLocaleString('en-US');
     $('#health').textContent = `${'♥'.repeat(hud.hp)}${'♡'.repeat(hud.maxHp - hud.hp)}`;
@@ -100,14 +139,10 @@ function updateFlightTelemetry() {
   }
 }
 
-function updateStats(stats) {
-  $('#frames-per-second').textContent = Math.round(stats.fps);
-  $('#steps-per-second').textContent = Math.round(stats.stepsPerSecond);
-}
-
 const loop = createLoop({
   simulate,
   render(alpha, stats, timestamp) {
+    if (phase !== 'playing' || !renderer) return;
     renderer.render(previous, current, alpha, timestamp, autoThrust ? null : game.world);
     if (timestamp - lastHudUpdate > 90) {
       lastHudUpdate = timestamp;
@@ -115,13 +150,17 @@ const loop = createLoop({
       updateFlightTelemetry();
     }
   },
-  onStats: updateStats,
+  onStats: (stats) => {
+    $('#frames-per-second').textContent = Math.round(stats.fps);
+    $('#steps-per-second').textContent = Math.round(stats.stepsPerSecond);
+  },
   scheduler: experiment === 'interval' ? 'interval' : 'raf',
   variableTimestep: experiment === 'variable',
   blockEvery60Frames: experiment === 'block',
 });
 
 function setPaused(next) {
+  if (phase !== 'playing') return;
   paused = next;
   if (paused) loop.stop();
   else loop.start();
@@ -135,9 +174,124 @@ function setPaused(next) {
   if (!paused) canvas.focus({ preventScroll: true });
 }
 
+async function showLobby() {
+  phase = 'lobby';
+  loop.stop();
+  paused = false;
+  $('#pause-overlay').hidden = true;
+  renderer.render(previous, current, 1, 0, null);
+  lobbyView.show();
+  $('#system-status').textContent = 'ROOMS ONLINE';
+  watcherController = new AbortController();
+  lobby.addEventListener('roomerror', showRoomError);
+  lobby.start();
+  // Consume an async stream of room refresh events in the DOM layer.
+  void (async () => {
+    try {
+      for await (const rooms of lobby.updates({ signal: watcherController.signal })) {
+        lobbyView.renderRooms(rooms);
+      }
+    } catch (error) {
+      if (!watcherController.signal.aborted) lobbyView.error(error.message);
+    }
+  })();
+}
+
+function showRoomError(event) {
+  lobbyView.error(
+    `Network error: ${event.detail.message}. Try REFRESH; the previous list stays available.`,
+  );
+}
+
+lobby.addEventListener('join', ({ detail }) => {
+  if (watcherController) watcherController.abort();
+  lobby.removeEventListener('roomerror', showRoomError);
+  lobbyView.hide();
+  activeRoom = detail.room;
+  pilotName = detail.name;
+  phase = 'playing';
+  $('#sector-label').textContent = detail.room.name.toUpperCase();
+  $('.arena-lower-left').textContent =
+    `✧ ${pilotName.toUpperCase()} / ${detail.room.name.toUpperCase()}`;
+  $('#system-status').textContent = 'SYSTEM ONLINE';
+  resetSimulation();
+  if (experiment) {
+    const messages = {
+      block: 'Lab 01: 100 ms event-loop block',
+      interval: 'Lab 01: timer scheduler',
+      variable: 'Lab 01: variable timestep',
+    };
+    $('#experiment-alert').textContent = messages[experiment];
+    $('#experiment-alert').hidden = false;
+  }
+  if (autoThrust) {
+    $('#experiment-alert').hidden = false;
+    $('#experiment-alert').textContent = 'Lab 01 automated 5-second trajectory benchmark.';
+  }
+  renderer.render(previous, current, 1, 0, autoThrust ? null : game.world);
+  loop.start();
+  canvas.focus({ preventScroll: true });
+});
+
+async function boot() {
+  loadingController?.abort();
+  loadingController = new AbortController();
+  const signal = loadingController.signal;
+  phase = 'loading';
+  loop.stop();
+  lobby.stop();
+  watcherController?.abort();
+  lobbyView.hide();
+  $('#asset-failure').hidden = true;
+  $('#pause-overlay').hidden = true;
+  $('#system-status').textContent = 'LOADING ASSETS';
+  drawLoading(surface, { completed: 0, total: 1, file: '/assets/manifest.json' });
+  try {
+    manifest = await fetchJson('/assets/manifest.json', { signal });
+    const faultyManifest = faultManifest(manifest, failureMode);
+    const options = faultOptions(failureMode, loadingController);
+    resources = await loadAll(faultyManifest, {
+      ...options,
+      signal,
+      onProgress: ({ completed, total, file }) => drawLoading(surface, { completed, total, file }),
+    });
+    if (signal.aborted) return;
+    renderer = createRenderer(surface, { sprites: resources.images });
+    audio.setBuffers(resources.audio);
+    await showLobby();
+  } catch (error) {
+    if (signal.aborted && phase !== 'loading') return;
+    loadingController.abort(); // cancel still-running sibling requests from Promise.all
+    console.warn('[Space Arena] Recoverable asset error:', error);
+    drawLoadError(surface, error.message);
+    $('#asset-error-message').textContent = `${error.name}: ${error.message}`;
+    $('#asset-failure').hidden = false;
+    $('#system-status').textContent = 'LOAD FAILED';
+  }
+}
+
+$('#retry-assets').addEventListener('click', () => {
+  const next = new URL(location.href);
+  next.searchParams.delete('failure');
+  failureMode = null;
+  history.replaceState(null, '', next);
+  void boot();
+});
 $('#pause-button').addEventListener('click', () => setPaused(!paused));
 $('#reset-button').addEventListener('click', resetSimulation);
+$('#back-to-lobby').addEventListener('click', () => {
+  if (phase !== 'playing') return;
+  void showLobby();
+});
+$('#mute-button').addEventListener('click', () => {
+  audio.unlock();
+  audio.setMuted(!audio.muted);
+  $('#mute-button').lastElementChild.textContent = audio.muted ? 'Sound off' : 'Sound on';
+  $('#sound-toggle').textContent = `♪ SOUND: ${audio.muted ? 'OFF' : 'ON'}`;
+  $('#mute-button').setAttribute('aria-pressed', String(audio.muted));
+});
 window.addEventListener('keydown', (event) => {
+  if (phase !== 'playing') return;
   if (
     event.code === 'KeyP' &&
     !event.repeat &&
@@ -147,46 +301,46 @@ window.addEventListener('keydown', (event) => {
   if (event.code === 'KeyR' && paused) resetSimulation();
 });
 
-if (experiment) {
-  $('#experiment-alert').hidden = false;
-  const labels = {
-    block: 'Experiment 1: blocking render for 100 ms every 60th frame — inspect FPS and jitter.',
-    interval: 'Experiment 2: using setInterval(..., 16) instead of requestAnimationFrame.',
-    variable: 'Experiment 3: variable timestep — try Chrome DevTools CPU throttling 6×.',
-  };
-  $('#experiment-alert').textContent = labels[experiment];
-}
-if (autoThrust && !experiment) {
-  $('#experiment-alert').hidden = false;
-  $('#experiment-alert').textContent =
-    'Original Lab 01 automated 5-second thrust benchmark (no combat).';
-}
-
 window.__spaceArenaDebug = Object.freeze({
-  getState: () => ({ ...current, simulatedSeconds, benchmarkComplete }),
+  getState: () => ({ ...current, simulatedSeconds, benchmarkComplete, phase, pilotName }),
   getStats: () => loop.getStats(),
   getMode: () => experiment || 'fixed',
-  getWorld: () => ({
-    score: game.score,
-    hud: { ...game.hud },
-    entities: [...game.world].map((e) => ({
-      id: e.id,
-      kind: e.kind,
-      team: e.team,
-      x: e.position.x,
-      y: e.position.y,
-      alive: e.alive,
-    })),
-  }),
-  // Demonstration helper: fire on the bound Ship instance (never expose a mutable reference).
+  getWorld: () =>
+    game
+      ? {
+          score: game.score,
+          hud: { ...game.hud },
+          entities: [...game.world].map((e) => ({
+            id: e.id,
+            kind: e.kind,
+            x: e.position.x,
+            y: e.position.y,
+            alive: e.alive,
+          })),
+        }
+      : null,
   getThisDemo: () => ({ methodOwner: 'Ship', example: 'player.fire.bind(player)' }),
+  getLoadStatus: () => ({
+    phase,
+    assets: manifest?.assets.length || 0,
+    loaded: Boolean(resources),
+    room: activeRoom?.id,
+    audioUnlocked: audio.unlocked,
+  }),
+  // Measurements only; explicitly opt in from DevTools, not run in normal boot.
+  compareAssetLoading: () => measureLoading(manifest),
+  returnToLobby: () => {
+    if (phase === 'playing') void showLobby();
+  },
 });
 
-renderer.render(previous, current, 1, 0, autoThrust ? null : game.world);
-updateFlightTelemetry();
-loop.start();
+void boot();
 window.addEventListener('pagehide', () => {
+  loadingController?.abort();
+  watcherController?.abort();
+  lobby.stop();
   loop.stop();
   input.dispose();
+  audio.close();
   surface.dispose();
 });

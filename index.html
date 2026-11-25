@@ -8,7 +8,7 @@
       name="description"
       content="Space Arena — Canvas 2D space combat with composition, World and entities."
     />
-    <title>Space Arena — Combat Deck</title>
+    <title>Space Arena — Async Command Deck</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -34,11 +34,11 @@
           </div>
           <span class="brand-name">SPACE<span>ARENA</span></span>
           <span class="brand-divider"></span>
-          <span class="brand-context">COMBAT DECK</span>
+          <span class="brand-context">ASYNC DECK</span>
         </div>
         <div class="topbar-right">
           <span class="topbar-version"
-            >BUILD 0.2.0 <span class="dot-sep">/</span> LAB 02 OF 08</span
+            >BUILD 0.3.0 <span class="dot-sep">/</span> LAB 03 OF 08</span
           >
           <div class="online-pill">
             <span class="live-dot"></span><span id="system-status">SYSTEM ONLINE</span>
@@ -51,11 +51,11 @@
           <div class="section-heading">
             <div>
               <div class="eyebrow">
-                <span class="eyebrow-line"></span> SPACE COMBAT SANDBOX
+                <span class="eyebrow-line"></span> ASYNC SPACE COMBAT
                 <span class="eyebrow-number">/ 001</span>
               </div>
               <h1 id="page-title">Defend the <span>void.</span></h1>
-              <p>Dogfight the rival ship. Destroy asteroids. Collect energy. Stay alive.</p>
+              <p>Load your ship, join a sector, and fight across the stars.</p>
             </div>
             <div class="flight-tag"><span class="flight-tag-dot"></span> COMBAT SYSTEM ACTIVE</div>
           </div>
@@ -65,7 +65,8 @@
               <div class="arena-hud-group">
                 <span class="hud-corner-icon">⌖</span>
                 <div>
-                  <span class="hud-kicker">LOCATION</span><strong>SECTOR 02 · DOGFIGHT</strong>
+                  <span class="hud-kicker">LOCATION</span
+                  ><strong><span id="sector-label">AWAITING JOIN</span></strong>
                 </div>
               </div>
               <div class="arena-hud-right">
@@ -95,6 +96,50 @@
               <div class="arena-lower-right" id="canvas-coordinates" aria-live="off">
                 X 0550 <span>/</span> Y 0340
               </div>
+              <div class="lobby-overlay" id="lobby-overlay" hidden>
+                <div class="lobby-panel">
+                  <div class="lobby-eyebrow">◈ NETWORK LOBBY / LOCAL SIMULATION</div>
+                  <h2>Select your <em>sector.</em></h2>
+                  <p class="lobby-intro">
+                    Your callsign and the arena configuration. No backend multiplayer yet — that
+                    arrives in Lab 04.
+                  </p>
+                  <form id="lobby-form">
+                    <label class="pilot-label" for="pilot-name">PILOT CALLSIGN</label>
+                    <input
+                      type="text"
+                      id="pilot-name"
+                      maxlength="20"
+                      value="Pilot"
+                      autocomplete="nickname"
+                      required
+                    />
+                    <div class="lobby-row-title">
+                      <span>AVAILABLE ROOMS</span
+                      ><button type="button" id="refresh-rooms">↻ REFRESH</button>
+                    </div>
+                    <div id="room-grid" class="room-grid" aria-label="Available rooms">
+                      <p class="lobby-spinner">Connecting to /api/rooms...</p>
+                    </div>
+                    <div id="lobby-message" class="lobby-message" role="status">
+                      Checking room availability...
+                    </div>
+                    <button type="submit" id="join-game" class="join-button" disabled>
+                      JOIN MISSION <span>→</span>
+                    </button>
+                  </form>
+                  <div class="lobby-footer">
+                    <button id="sound-toggle" type="button">♪ SOUND: ON</button
+                    ><span>GET /api/rooms · POLL / 5s</span>
+                  </div>
+                  <button id="leave-arena" type="button" hidden>Close</button>
+                </div>
+              </div>
+              <div class="asset-failure" id="asset-failure" hidden role="alert">
+                <h2>Resource load failed</h2>
+                <p id="asset-error-message">Cannot fetch assets</p>
+                <button type="button" id="retry-assets">↻ Retry loading</button>
+              </div>
               <div class="pause-overlay" id="pause-overlay" hidden>
                 <div class="pause-icon">Ⅱ</div>
                 <h2>Simulation paused</h2>
@@ -116,6 +161,17 @@
               <button type="button" class="action-btn action-secondary" id="reset-button">
                 <span>↻</span> Reset arena
               </button>
+              <button type="button" class="action-btn action-secondary" id="back-to-lobby">
+                <span>⌂</span> Lobby
+              </button>
+              <button
+                type="button"
+                class="action-btn action-secondary"
+                id="mute-button"
+                aria-pressed="false"
+              >
+                <span>♪</span> Sound on
+              </button>
             </div>
             <div class="arena-hint">
               <span class="hint-glow"></span> WASD to fly <span class="hint-divider">·</span> SPACE
@@ -129,7 +185,7 @@
 
         <aside class="sidebar" aria-label="Ship telemetry and controls">
           <div class="sidebar-head">
-            <span>COMBAT TELEMETRY</span><span class="sidebar-index">01 / LIVE</span>
+            <span>COMBAT TELEMETRY</span><span class="sidebar-index">03 / LIVE</span>
           </div>
           <section class="metrics-grid" aria-label="Live performance metrics">
             <div class="metric-card metric-card-feature">
@@ -216,7 +272,7 @@
             ><span
               ><strong>DEV NOTE</strong>
               <span
-                >One-level inheritance. World Map, composition, collision sweep and HUD.</span
+                >EventTarget signals, async assets, Web Audio and zero-blocking lobby polling.</span
               ></span
             >
           </div>
