@@ -31,14 +31,12 @@ test('Two browser contexts: remote flight moves and chat crosses room', async ({
     await expect
       .poll(async () => b.evaluate(() => window.__spaceArenaDebug.getNetwork().remoteShips.length))
       .toBeGreaterThan(0);
-    const playerAId = await a.evaluate(
-  () => window.__spaceArenaDebug.getNetwork().netId,
-);
+    const playerAId = await a.evaluate(() => window.__spaceArenaDebug.getNetwork().netId);
 
-const before = await b.evaluate(
-  (id) => window.__spaceArenaDebug.getNetwork().remoteShips.find((p) => p.id === id),
-  playerAId,
-);
+    const before = await b.evaluate(
+      (id) => window.__spaceArenaDebug.getNetwork().remoteShips.find((p) => p.id === id),
+      playerAId,
+    );
     expect(before).toBeTruthy();
     await a.locator('#arena').focus();
     await a.keyboard.down('KeyW');
