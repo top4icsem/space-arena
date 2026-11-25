@@ -332,6 +332,12 @@ async function boot() {
   }
 }
 
+connection.addEventListener('shutdown', () => {
+  if (networkMode && phase === 'playing') {
+    void showLobby();
+    $('#system-status').textContent = 'SERVER DISCONNECTED · RECONNECT FROM LOBBY';
+  }
+});
 connection.addEventListener('snapshot', ({ detail }) => {
   if (networkMode) netGame.receive(detail.frame, detail.bytes);
 });
@@ -501,6 +507,17 @@ if (params.get('worker') === '1') {
     .catch((error) => console.warn('[Lab07] Worker experiment unavailable', error));
 }
 void boot();
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener(
+    'load',
+    () => {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .catch((error) => console.warn('[PWA] Service worker registration failed', error));
+    },
+    { once: true },
+  );
+}
 window.addEventListener('pagehide', () => {
   loadingController?.abort();
   watcherController?.abort();

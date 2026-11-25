@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { logger } from './logger.ts';
 import type { EntityId } from '../../shared/types.ts';
 
 export type RoomEvent =
@@ -83,7 +84,7 @@ export class Room extends EventEmitter {
     this.maxPlayers = maxPlayers;
     this.asteroidCount = asteroidCount;
     this.asteroidRespawnSeconds = asteroidRespawnSeconds;
-    this.on('error', (error: Error) => console.error(`[Room ${this.id}]`, error));
+    this.on('error', (error: Error) => logger.error({ err: error, roomId: this.id }, 'room error'));
   }
   get size(): number {
     return this.players.size;
@@ -174,7 +175,7 @@ export class RoomManager extends EventEmitter {
     this.maxRooms = maxRooms;
     this.maxPlayers = maxPlayers;
     this.onRoom = onRoom;
-    this.on('error', (error: Error) => console.error('[RoomManager]', error));
+    this.on('error', (error: Error) => logger.error({ err: error }, 'room manager error'));
     if (seed) for (const item of presets) this.create({ ...item, maxPlayers, persistent: true });
   }
   create(input: RoomOptions): Room {

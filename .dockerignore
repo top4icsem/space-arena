@@ -1,0 +1,14 @@
+.git
+.github
+**/node_modules
+**/dist
+.env
+.env.*
+!.env.example
+coverage
+playwright-report
+test-results
+server/logs
+**/.DS_Store
+.lab*_patch
+*.zip

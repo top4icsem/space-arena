@@ -4,6 +4,8 @@ import { resolve, relative, sep, extname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { z } from 'zod';
+import { logger } from './logger.ts';
+import { prometheus } from './telemetry.ts';
 import { streamReplay } from './log/replay.ts';
 import type { RoomManager } from './rooms.ts';
 
@@ -19,6 +21,7 @@ const MIME: Record<string, string> = {
   '.webp': 'image/webp',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
 };
 const RoomCreateSchema = z
   .object({
@@ -86,12 +89,18 @@ export function createHttpHandler({
   distDir,
   slowDemo = false,
   metrics,
+  ready,
+  buildSha,
+  buildTag,
 }: {
   rooms: RoomManager;
   logs: LogReplaySource;
   distDir: string;
   slowDemo?: boolean;
   metrics?: () => unknown;
+  ready?: () => boolean;
+  buildSha?: string;
+  buildTag?: string;
 }): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res) => {
     try {
@@ -103,7 +112,24 @@ export function createHttpHandler({
           ok: true,
           uptime: Math.round(process.uptime()),
           rooms: rooms.list().length,
+          sha: buildSha ?? process.env.BUILD_SHA ?? 'development',
+          tag: buildTag ?? process.env.BUILD_TAG ?? 'development',
         });
+      if (rawPath === '/ready' && req.method === 'GET')
+        return reply(res, ready?.() ? 200 : 503, {
+          ready: ready?.() ?? false,
+        });
+      if (rawPath === '/metrics' && req.method === 'GET') {
+        const data = metrics?.();
+        if (!data) return reply(res, 503, { error: 'Metrics unavailable' });
+        res.writeHead(200, {
+          'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+        });
+        res.end(prometheus(data as Parameters<typeof prometheus>[0]));
+        return;
+      }
       if (rawPath === '/api/slow' && req.method === 'GET' && slowDemo) {
         const until = performance.now() + 300;
         while (performance.now() < until) {
@@ -160,7 +186,7 @@ export function createHttpHandler({
       await pipeline(createReadStream(file), res);
     } catch (error: unknown) {
       if (res.destroyed || res.writableEnded) return;
-      if (!(error instanceof HttpError)) console.error('[HTTP]', error);
+      if (!(error instanceof HttpError)) logger.error({ err: error }, 'HTTP request error');
       reply(res, error instanceof HttpError ? error.status : 500, {
         error: error instanceof HttpError ? error.message : 'Internal server error',
       });

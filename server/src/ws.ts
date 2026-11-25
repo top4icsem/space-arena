@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Server } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
+import type { Logger } from 'pino';
 import { parseClientMessage, ProtocolError, CLOSE, sendable } from './protocol.ts';
 import { decodeInput, maskToControls } from '../../shared/codec.ts';
 import { entityId } from '../../shared/types.ts';
@@ -9,11 +10,20 @@ import { RealtimeRooms } from './network/realtime.ts';
 import type { RealtimePlayer } from './network/realtime.ts';
 import type { ServerConfig } from './config.ts';
 import type { WireInput } from '../../shared/types.ts';
+import { logger as defaultLogger } from './logger.ts';
+import type { Telemetry } from './telemetry.ts';
 
 function hasSocket(value: RoomPlayer): value is RealtimePlayer {
   return 'socket' in value && value.socket instanceof WebSocket;
 }
-export function attachWebSockets(server: Server, rooms: RoomManager, config: ServerConfig) {
+export function attachWebSockets(
+  server: Server,
+  rooms: RoomManager,
+  config: ServerConfig,
+  { logger = defaultLogger, telemetry }: { logger?: Logger; telemetry?: Telemetry } = {},
+) {
+  let accepting = true;
+  const ipCounts = new Map<string, number>();
   const wss = new WebSocketServer({
     noServer: true,
     maxPayload: config.maxMessageBytes,
@@ -25,8 +35,9 @@ export function attachWebSockets(server: Server, rooms: RoomManager, config: Ser
       if (critical) socket.close(1013, 'Slow consumer');
       return;
     }
+    telemetry?.recordOutgoing(Buffer.byteLength(message));
     socket.send(message, (error?: Error) => {
-      if (error) console.error('[ws send]', error.message);
+      if (error) logger.warn({ err: error }, 'WebSocket send error');
     });
   }
   const realTime = new RealtimeRooms(rooms, safeSend);
@@ -54,24 +65,56 @@ export function attachWebSockets(server: Server, rooms: RoomManager, config: Ser
   };
   for (const room of rooms.rooms.values()) addRoom(room);
   rooms.on('created', addRoom);
-  server.on('upgrade', (req, socket, head) => {
+
+  const maxConnections = config.maxConnectionsPerIp ?? 8;
+  const origins = config.allowedOrigins ?? [];
+  const upgradeListener = (
+    req: import('node:http').IncomingMessage,
+    rawSocket: import('node:stream').Duplex,
+    head: Buffer,
+  ) => {
     const path = (req.url || '').split('?')[0];
     if (path !== '/ws') {
-      socket.write('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
-      socket.destroy();
+      rawSocket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n');
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
-  });
-  wss.on('error', (error: Error) => console.error('[WebSocketServer]', error));
-  wss.on('connection', (socket: WebSocket) => {
+    // Never trust X-Forwarded-For from an arbitrary client; use the TCP peer IP.
+    const ip = req.socket.remoteAddress || 'unknown';
+    const allowed =
+      origins.length === 0 ||
+      (typeof req.headers.origin === 'string' && origins.includes(req.headers.origin));
+    if (!accepting || !allowed || (ipCounts.get(ip) || 0) >= maxConnections) {
+      const status = !accepting
+        ? '503 Service Unavailable'
+        : !allowed
+          ? '403 Forbidden'
+          : '429 Too Many Requests';
+      rawSocket.end(`HTTP/1.1 ${status}\r\nConnection: close\r\n\r\n`);
+      logger.warn({ status, hasOrigin: Boolean(req.headers.origin) }, 'WebSocket upgrade rejected');
+      return;
+    }
+    ipCounts.set(ip, (ipCounts.get(ip) || 0) + 1);
+    try {
+      wss.handleUpgrade(req, rawSocket, head, (ws) => wss.emit('connection', ws, req));
+    } catch (error: unknown) {
+      const n = (ipCounts.get(ip) || 1) - 1;
+      if (n <= 0) ipCounts.delete(ip);
+      else ipCounts.set(ip, n);
+      rawSocket.destroy();
+      logger.warn({ err: error }, 'WebSocket handshake failed');
+    }
+  };
+  server.on('upgrade', upgradeListener);
+  wss.on('error', (error: Error) => logger.error({ err: error }, 'WebSocket server error'));
+  wss.on('connection', (socket: WebSocket, req: import('node:http').IncomingMessage) => {
+    const ip = req.socket.remoteAddress || 'unknown';
     let room: Room | null = null;
     let player: RealtimePlayer | null = null;
-    let missedPongs = 0,
-      tokens = config.ratePerSecond,
-      inputTokens = 60;
-    let lastRefill = Date.now(),
-      joined = false;
+    let missedPongs = 0;
+    let tokens = config.ratePerSecond;
+    let inputTokens = 60;
+    let lastRefill = Date.now();
+    let joined = false;
     const joinTimer = setTimeout(
       () => socket.close(CLOSE.JOIN_TIMEOUT, 'Join required in 5s'),
       5000,
@@ -87,18 +130,21 @@ export function attachWebSockets(server: Server, rooms: RoomManager, config: Ser
     const close = (code: number, message: string): void => {
       if (socket.readyState === WebSocket.OPEN) socket.close(code, message.slice(0, 110));
     };
-    socket.on('error', (error: Error) => console.warn('[ws socket]', error.message));
+    socket.on('error', (error: Error) => logger.warn({ err: error }, 'WebSocket client error'));
     socket.on('pong', () => {
       missedPongs = 0;
     });
     socket.on('message', (data: Buffer | ArrayBuffer | Buffer[], isBinary: boolean) => {
+      // A flood queued before close(1008) must not keep parsing or logging in CLOSING state.
+      if (socket.readyState !== WebSocket.OPEN) return;
       try {
-        const now = Date.now(),
-          elapsed = Math.max(0, (now - lastRefill) / 1000);
+        const now = Date.now();
+        const elapsed = Math.max(0, (now - lastRefill) / 1000);
         tokens = Math.min(config.ratePerSecond, tokens + elapsed * config.ratePerSecond);
         inputTokens = Math.min(60, inputTokens + elapsed * 60);
         lastRefill = now;
         const bytes = Array.isArray(data) ? Buffer.concat(data) : data;
+        telemetry?.recordIncoming(bytes.byteLength);
         let inputMessage: WireInput | null = null;
         if (isBinary) {
           if (!joined || player?.wire !== 'binary')
@@ -139,8 +185,11 @@ export function attachWebSockets(server: Server, rooms: RoomManager, config: Ser
             joined = true;
             clearTimeout(joinTimer);
             selected.join(member);
-            // Demo bots live in the server world, not in browser prediction.
             if (msg.bots !== undefined) realTime.enableBots(selected, msg.bots);
+            logger.info(
+              { roomId: selected.id, playerId: member.id, netId: member.netId },
+              'player joined',
+            );
             safeSend(
               socket,
               sendable('joined', {
@@ -170,6 +219,10 @@ export function attachWebSockets(server: Server, rooms: RoomManager, config: Ser
               break;
             }
             room.chat(player, msg.text.trim());
+            logger.info(
+              { roomId: room.id, playerId: player.id, textBytes: Buffer.byteLength(msg.text) },
+              'chat accepted',
+            );
             break;
           }
           case 'leave':
@@ -182,36 +235,51 @@ export function attachWebSockets(server: Server, rooms: RoomManager, config: Ser
         }
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Protocol error';
-        console.warn('[ws protocol]', message);
+        logger.warn(
+          { roomId: room?.id, playerId: player?.id, message },
+          'WebSocket protocol rejected',
+        );
         close(error instanceof ProtocolError ? error.closeCode : CLOSE.INVALID, message);
       }
     });
     socket.on('close', () => {
+      const remaining = (ipCounts.get(ip) || 1) - 1;
+      if (remaining <= 0) ipCounts.delete(ip);
+      else ipCounts.set(ip, remaining);
       clearTimeout(joinTimer);
       clearInterval(heartbeat);
       if (room && player) {
+        logger.info({ roomId: room.id, playerId: player.id }, 'player disconnected');
         realTime.leave(room, player);
         room.leave(player.id);
       }
     });
   });
+
   return {
     wss,
     realTime,
+    metrics: () => ({
+      players: wss.clients.size,
+      rooms: rooms.list().length,
+      realtime: realTime.performance,
+    }),
     async close(): Promise<void> {
+      accepting = false;
       realTime.stop();
       rooms.off('created', addRoom);
+      server.off('upgrade', upgradeListener);
       for (const socket of wss.clients) {
-        if (socket.readyState === WebSocket.OPEN) socket.close(1001, 'Server shutting down');
-        else socket.terminate();
+        if (socket.readyState === WebSocket.OPEN) {
+          safeSend(socket, sendable('shutdown', { reason: 'Server maintenance' }), true);
+          socket.close(1001, 'Server shutting down');
+        } else socket.terminate();
       }
-      await new Promise<void>((resolve) => setTimeout(resolve, 150));
+      // Allow clients to observe close code 1001; cap drain so SIGTERM never hangs.
+      await new Promise<void>((resolve) => setTimeout(resolve, 800));
       for (const socket of wss.clients) socket.terminate();
       await new Promise<void>((resolve, reject) => {
-        wss.close((err?: Error) => {
-          if (err) reject(err);
-          else resolve();
-        });
+        wss.close((err) => (err ? reject(err) : resolve()));
       });
     },
   };

@@ -162,6 +162,10 @@ export class SocketConnection extends EventTarget {
         return;
       }
       if (!isObject(payload) || typeof payload.type !== 'string' || payload.v !== 0) return;
+      if (payload.type === 'shutdown') {
+        this.emit('status', String(payload.reason || 'Server shutting down'));
+        return;
+      }
       if (payload.type === 'snapshot') {
         // The typed wire format is preferred; JSON is a Lab 05 comparison mode.
         if (isObject(payload) && Array.isArray(payload.players)) {
@@ -193,6 +197,11 @@ export class SocketConnection extends EventTarget {
         );
         this.pendingJoin = null;
         this.manual = true;
+      }
+      if (!this.manual && [1001, 1006, 1011].includes(event.code)) {
+        this.manual = true;
+        this.emit('shutdown', { reason: `Connection closed (${event.code})` });
+        return;
       }
       if (!this.manual) this.scheduleRetry();
     });

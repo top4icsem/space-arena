@@ -1,6 +1,6 @@
 {
   "name": "space-arena",
-  "version": "0.7.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -8,7 +8,7 @@
     "server",
     "shared"
   ],
-  "description": "Space Arena Lab 07 - Vitest, fast-check, Playwright, V8 profiling and bounded pools",
+  "description": "Space Arena Lab 08 — Docker, observability, safe shutdown, PWA, CI/CD",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:client": "npm run dev -w client",
@@ -32,7 +32,9 @@
     "bench:world": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/bench-world.mjs",
     "bench:browser": "node scripts/profile-browser.mjs",
     "bench:worker": "node scripts/benchmark-worker.mjs",
-    "dev:e2e": "node scripts/dev-e2e.mjs"
+    "dev:e2e": "node scripts/dev-e2e.mjs",
+    "test:docker": "node scripts/docker-smoke.mjs",
+    "fault:frames": "node scripts/fault-client.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

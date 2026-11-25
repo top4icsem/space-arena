@@ -6,59 +6,98 @@ import { RoomManager } from './rooms.ts';
 import { MatchLogStore } from './log/matchlog.ts';
 import { createHttpHandler } from './http.ts';
 import { attachWebSockets } from './ws.ts';
+import { logger } from './logger.ts';
+import { Telemetry } from './telemetry.ts';
 
 const config = readConfig();
 const root = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 const logs = new MatchLogStore(config.logDir);
+const telemetry = new Telemetry();
 const manager = new RoomManager({
   maxRooms: config.maxRooms,
   maxPlayers: config.maxPlayers,
   onRoom: (room) => {
-    void logs.attach(room).catch((error: unknown) => room.emit('error', error));
+    void logs
+      .attach(room)
+      .catch((error: unknown) =>
+        logger.error({ err: error, roomId: room.id }, 'match log attach failed'),
+      );
   },
 });
-let getMetrics: () => unknown = () => ({ ready: false });
+let stopping = false;
 const server = createServer(
   createHttpHandler({
     rooms: manager,
     logs,
     distDir: resolve(root, 'client/dist'),
     slowDemo: config.slowDemo,
-    metrics: () => getMetrics(),
+    metrics: () => telemetry.snapshot(manager, sockets.realTime),
+    ready: () =>
+      !stopping &&
+      (manager.rooms.size < config.maxRooms ||
+        [...manager.rooms.values()].some((room) => room.size < room.maxPlayers)),
+    buildSha: config.buildSha,
+    buildTag: config.buildTag,
   }),
 );
-server.on('error', (error: Error) => {
-  console.error('[server]', error);
-  process.exitCode = 1;
+const sockets = attachWebSockets(server, manager, config, { logger, telemetry });
+server.on('error', (err: Error) => {
+  logger.fatal({ err }, 'HTTP server failure');
+  process.exit(1);
 });
-const sockets = attachWebSockets(server, manager, config);
-getMetrics = () => sockets.realTime.performance;
 server.listen(config.port, config.host, () => {
-  const address = server.address();
-  console.log(
-    `[Space Arena Lab 07] http://${config.host}:${typeof address === 'object' && address ? address.port : config.port} | rooms=${manager.list().length}`,
+  logger.info(
+    {
+      host: config.host,
+      port: config.port,
+      buildSha: config.buildSha,
+      rooms: manager.list().length,
+    },
+    'server listening',
   );
-  console.log('[HTTP] GET /health, GET/POST /api/rooms, GET /api/replays/:id | [WS] /ws');
 });
-let stopping = false;
+
 async function shutdown(signal: string): Promise<void> {
   if (stopping) return;
   stopping = true;
-  console.log(`[shutdown] ${signal}: disconnect clients, flush NDJSON, close HTTP`);
+  const deadline = setTimeout(() => {
+    logger.fatal({ signal }, 'shutdown exceeded 9 seconds');
+    process.exit(1);
+  }, 9000);
   try {
+    logger.info({ signal }, 'shutdown started');
+    // Stop HTTP admission first, then tell all WebSocket players to return to the lobby.
+    const closedHttp = new Promise<void>((resolve) => {
+      server.close((error) => {
+        if (error) logger.error({ err: error }, 'HTTP close error');
+        resolve();
+      });
+      server.closeIdleConnections();
+    });
     await sockets.close();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await closedHttp;
     await logs.closeAll();
-    console.log('[shutdown] complete');
-    process.exitCode = 0;
-  } catch (error: unknown) {
-    console.error('[shutdown]', error);
-    process.exitCode = 1;
+    telemetry.stop();
+    logger.info({ signal }, 'shutdown complete');
+    clearTimeout(deadline);
+    process.exit(0);
+  } catch (err: unknown) {
+    logger.fatal({ err, signal }, 'shutdown failed');
+    clearTimeout(deadline);
+    process.exit(1);
   }
 }
+process.on('SIGTERM', () => {
+  void shutdown('SIGTERM');
+});
 process.on('SIGINT', () => {
   void shutdown('SIGINT');
 });
-process.on('SIGTERM', () => {
-  void shutdown('SIGTERM');
+process.on('uncaughtException', (err) => {
+  logger.fatal({ err }, 'uncaught exception');
+  process.exit(1);
+});
+process.on('unhandledRejection', (err) => {
+  logger.fatal({ err }, 'unhandled rejection');
+  process.exit(1);
 });

@@ -1,10 +1,12 @@
-name: Space Arena Lab 07 — types, tests, coverage, browsers
+name: Space Arena — CI and release
 on:
   push:
     branches: [main]
-    tags: ['lab-*']
+    tags: ['lab-*', 'v*']
   pull_request:
     branches: [main]
+permissions:
+  contents: read
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -16,23 +18,57 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - name: Install workspace dependencies
-        run: npm ci
-      - name: TypeScript
-        run: npm run typecheck
-      - name: Lint, legacy + Vitest tests, shared coverage >=85%, build
+        run: npm ci --include=optional
+      - name: Types, lint, legacy tests, Vitest and build
         run: npm run check
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
-      - name: 'Two real browser contexts: movement + chat'
+      - name: Two browser contexts — movement and chat
         run: |
           touch .env
           npm run test:e2e
+      - name: Test Docker health, shutdown and image size
+        run: npm run test:docker
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: lab07-coverage-playwright
+          name: lab08-reports
           path: |
             coverage/
             playwright-report/
             test-results/
           if-no-files-found: ignore
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          build-args: |
+            BUILD_SHA=${{ github.sha }}
+            BUILD_TAG=${{ github.ref_name }}
+      - name: Deploy pinned image to Fly.io (when configured)
+        if: ${{ vars.FLY_APP_NAME != '' }}
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_APP_NAME: ${{ vars.FLY_APP_NAME }}
+          IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+        run: |
+          test -n "$FLY_API_TOKEN" || { echo 'Set GitHub Actions secret FLY_API_TOKEN'; exit 1; }
+          curl -fsSL https://fly.io/install.sh | sh
+          "$HOME/.fly/bin/flyctl" deploy --app "$FLY_APP_NAME" --image "$IMAGE" --remote-only --config fly.toml
