@@ -18,9 +18,13 @@ export class Ship extends Entity {
     this.invincibleFor = 1.5;
   }
 
-  get hp() { return this.#hp; }
+  get hp() {
+    return this.#hp;
+  }
 
-  setControls(controls) { this.controls = { ...controls }; }
+  setControls(controls) {
+    this.controls = { ...controls };
+  }
 
   damage(amount = 1) {
     if (!this.alive || this.invincibleFor > 0) return false;
@@ -62,13 +66,17 @@ export class Ship extends Entity {
     this.previousPosition = this.position;
     this.invincibleFor = Math.max(0, this.invincibleFor - dt);
     this.fireCooldown = Math.max(0, this.fireCooldown - dt);
-    const next = integrate({
-      ...createShip(this.position.x, this.position.y),
-      vx: this.velocity.x,
-      vy: this.velocity.y,
-      angle: this.angle,
-      thrusting: this.thrusting,
-    }, this.controls, dt);
+    const next = integrate(
+      {
+        ...createShip(this.position.x, this.position.y),
+        vx: this.velocity.x,
+        vy: this.velocity.y,
+        angle: this.angle,
+        thrusting: this.thrusting,
+      },
+      this.controls,
+      dt,
+    );
     this.position = new Vector2(
       wrapCoordinate(next.x, world.arena.width),
       wrapCoordinate(next.y, world.arena.height),

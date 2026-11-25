@@ -57,7 +57,9 @@ export function createLoop({
 
     if (blockEvery60Frames && (totalFrameCount + 1) % 60 === 0) {
       const until = performance.now() + 100;
-      while (performance.now() < until) { /* Lab 01 deliberate main-thread block */ }
+      while (performance.now() < until) {
+        /* Lab 01 deliberate main-thread block */
+      }
     }
 
     frameCount++;
@@ -66,8 +68,8 @@ export function createLoop({
     const elapsedMs = timestamp - sampleStart;
     if (elapsedMs >= 1000) {
       latestStats = {
-        fps: frameCount * 1000 / elapsedMs,
-        stepsPerSecond: stepCount * 1000 / elapsedMs,
+        fps: (frameCount * 1000) / elapsedMs,
+        stepsPerSecond: (stepCount * 1000) / elapsedMs,
         frameMs: rawDelta * 1000,
         totalFrames: totalFrameCount,
       };

@@ -71,18 +71,18 @@ test('interpolation takes the shortest route across an arena boundary', () => {
 });
 
 test('angle interpolation crosses 360 degrees by the short arc', () => {
-  const from = 179 * Math.PI / 180;
-  const to = -179 * Math.PI / 180;
+  const from = (179 * Math.PI) / 180;
+  const to = (-179 * Math.PI) / 180;
   assert.ok(Math.abs(Math.abs(lerpAngle(from, to, 0.5)) - Math.PI) < 1e-8);
 });
 
 test('interpolated ship has expected position and heading', () => {
   const previous = createShip(10, 20);
-  const next = { ...previous, x: 30, y: 50, angle: .4 };
-  const middle = interpolateShip(previous, next, .5);
+  const next = { ...previous, x: 30, y: 50, angle: 0.4 };
+  const middle = interpolateShip(previous, next, 0.5);
   assert.equal(middle.x, 20);
   assert.equal(middle.y, 35);
-  assert.ok(Math.abs(middle.angle - .2) < 1e-8);
+  assert.ok(Math.abs(middle.angle - 0.2) < 1e-8);
 });
 
 test('identical input sequences result in identical final states', () => {

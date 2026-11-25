@@ -23,7 +23,9 @@ test('Vector2 arithmetic is pure and returns new frozen vectors', () => {
   assert.equal(a.distanceTo(b), Math.sqrt(10));
   assert.deepEqual(a, at(3, 4));
   assert.notStrictEqual(a.add(b), a);
-  assert.throws(() => { a.x = 40; }, TypeError);
+  assert.throws(() => {
+    a.x = 40;
+  }, TypeError);
 });
 
 test('Vector2 rotations and forward vector preserve Lab 01 up direction', () => {
@@ -52,7 +54,9 @@ test('Ship inherits exactly one level, carries private hp with public getter', (
   assert.equal(Object.getPrototypeOf(Object.getPrototypeOf(ship)), Entity.prototype);
   assert.equal(ship.hp, 3);
   assert.equal(ship['#hp'], undefined);
-  assert.throws(() => { ship.hp = 900; }, TypeError);
+  assert.throws(() => {
+    ship.hp = 900;
+  }, TypeError);
   ship.invincibleFor = 0;
   assert.equal(ship.damage(), true);
   assert.equal(ship.hp, 2);
@@ -94,11 +98,17 @@ test('World keeps Map, generator, iteration and marked despawns until sweep', ()
   const a = world.spawn(makeAsteroid({ position: at(50, 50) }));
   const b = world.spawn(makeAsteroid({ position: at(250, 250) }));
   assert.ok(world.entities instanceof Map);
-  assert.deepEqual([...world.ofKind('asteroid')].map((entity) => entity.id), [a.id, b.id]);
+  assert.deepEqual(
+    [...world.ofKind('asteroid')].map((entity) => entity.id),
+    [a.id, b.id],
+  );
   assert.equal([...world].length, 2);
   assert.equal(world.despawn(a), true);
   assert.equal(world.entities.has(a.id), true);
-  assert.deepEqual([...world.ofKind('asteroid')].map((entity) => entity.id), [b.id]);
+  assert.deepEqual(
+    [...world.ofKind('asteroid')].map((entity) => entity.id),
+    [b.id],
+  );
   world.sweep();
   assert.equal(world.entities.has(a.id), false);
   assert.equal(world.entities.has(b.id), true);
@@ -126,7 +136,9 @@ test('circle collisions correctly check wrap-around edges', () => {
 
 test('player bullet destroys asteroid and both are removed at end of step', () => {
   const world = new World();
-  const asteroid = world.spawn(makeAsteroid({ position: at(200, 200), velocity: at(0, 0), radius: 24 }));
+  const asteroid = world.spawn(
+    makeAsteroid({ position: at(200, 200), velocity: at(0, 0), radius: 24 }),
+  );
   const bullet = world.spawn(makeBullet({ position: at(200, 202), velocity: at(0, 0) }));
   const events = world.step(0);
   assert.equal(world.entities.has(asteroid.id), false);
@@ -141,7 +153,9 @@ test('bullets hit rival ships but not their own team', () => {
   enemy.invincibleFor = 0;
   ally.invincibleFor = 0;
   world.spawn(makeBullet({ position: at(200, 200), velocity: at(0, 0), team: 'player' }));
-  world.spawn(makeBullet({ position: at(400, 400), velocity: at(0, 0), team: 'player', ownerId: ally.id }));
+  world.spawn(
+    makeBullet({ position: at(400, 400), velocity: at(0, 0), team: 'player', ownerId: ally.id }),
+  );
   world.step(0);
   assert.equal(enemy.hp, 2);
   assert.equal(ally.hp, 3);
@@ -165,8 +179,12 @@ test('stationary pickup is composed from Entity + collectible behavior', () => {
 test('homing is the same composable behavior on bullet and asteroid', () => {
   const world = new World();
   const target = world.spawn(new Ship({ position: at(200, 200) }));
-  const bullet = world.spawn(makeBullet({ position: at(400, 200), velocity: at(0, -380), team: 'enemy', guided: true }));
-  const asteroid = world.spawn(makeAsteroid({ position: at(450, 250), velocity: at(0, -70), guided: true }));
+  const bullet = world.spawn(
+    makeBullet({ position: at(400, 200), velocity: at(0, -380), team: 'enemy', guided: true }),
+  );
+  const asteroid = world.spawn(
+    makeAsteroid({ position: at(450, 250), velocity: at(0, -70), guided: true }),
+  );
   assert.ok(bullet.behaviors.some((ability) => ability.type === 'homing'));
   assert.ok(asteroid.behaviors.some((ability) => ability.type === 'homing'));
   // Enemy bullet deliberately targets player; guided asteroid targets same ship.
@@ -195,7 +213,10 @@ test('game initializes playable entities and fixed seeded layouts', () => {
   assert.equal(game.hud.score, 0);
   const initial = [...game.world.ofKind('asteroid')].map((item) => item.position);
   game.reset();
-  assert.deepEqual([...game.world.ofKind('asteroid')].map((item) => item.position), initial);
+  assert.deepEqual(
+    [...game.world.ofKind('asteroid')].map((item) => item.position),
+    initial,
+  );
 });
 
 test('game adds score, particles and removes destroyed asteroid', () => {
@@ -206,7 +227,14 @@ test('game adds score, particles and removes destroyed asteroid', () => {
   asteroid.previousPosition = asteroid.position;
   asteroid.velocity = at(0, 0);
   asteroid.durability = 1;
-  game.world.spawn(makeBullet({ position: at(550, 220), velocity: at(0, 0), team: 'player', ownerId: game.player.id }));
+  game.world.spawn(
+    makeBullet({
+      position: at(550, 220),
+      velocity: at(0, 0),
+      team: 'player',
+      ownerId: game.player.id,
+    }),
+  );
   game.simulate(0);
   assert.equal(game.score, 50);
   assert.equal(game.destroyedAsteroids, 1);
@@ -231,4 +259,3 @@ test('game respawns player after 2 seconds when killed', () => {
   assert.notEqual(game.player.id, dying.id);
   assert.equal(game.player.hp, 3);
 });
-

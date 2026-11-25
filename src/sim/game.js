@@ -14,7 +14,9 @@ function seededRandomGame(seed) {
 
 /** Enemy is another Ship, not an EnemyShip extends Ship: one inheritance level. */
 export class Game {
-  constructor() { this.reset(); }
+  constructor() {
+    this.reset();
+  }
 
   reset() {
     this.world = new World();
@@ -26,7 +28,9 @@ export class Game {
     this.asteroidTimer = 0;
     this.pickupTimer = 0;
     this.player = this.world.spawn(new Ship({ position: new Vector2(550, 340) }));
-    this.enemy = this.world.spawn(new Ship({ position: new Vector2(920, 120), team: 'enemy', hp: 2 }));
+    this.enemy = this.world.spawn(
+      new Ship({ position: new Vector2(920, 120), team: 'enemy', hp: 2 }),
+    );
     this.enemy.angle = Math.PI;
     const starters = [
       [155, 130, 29, 28, 9, false],
@@ -36,19 +40,29 @@ export class Game {
       [175, 590, 22, 42, -8, true],
     ];
     for (const [x, y, radius, vx, vy, guided] of starters) {
-      this.world.spawn(makeAsteroid({
-        position: new Vector2(x, y),
-        velocity: new Vector2(vx, vy), radius, guided,
-      }));
+      this.world.spawn(
+        makeAsteroid({
+          position: new Vector2(x, y),
+          velocity: new Vector2(vx, vy),
+          radius,
+          guided,
+        }),
+      );
     }
     this.world.spawn(makePickup(new Vector2(630, 290)));
   }
 
   get playerState() {
-    return this.player?.alive ? this.player.flightState : {
-      x: ARENA.width / 2, y: ARENA.height / 2,
-      vx: 0, vy: 0, angle: 0, thrusting: false,
-    };
+    return this.player?.alive
+      ? this.player.flightState
+      : {
+          x: ARENA.width / 2,
+          y: ARENA.height / 2,
+          vx: 0,
+          vy: 0,
+          angle: 0,
+          thrusting: false,
+        };
   }
 
   spawnAsteroid() {
@@ -58,11 +72,14 @@ export class Game {
     const radius = 21 + this.random() * 18;
     const angle = this.random() * Math.PI * 2;
     const guided = this.random() < 0.25;
-    this.world.spawn(makeAsteroid({
-      position: new Vector2(x, y),
-      velocity: Vector2.fromAngle(angle, 28 + this.random() * 23),
-      radius, guided,
-    }));
+    this.world.spawn(
+      makeAsteroid({
+        position: new Vector2(x, y),
+        velocity: Vector2.fromAngle(angle, 28 + this.random() * 23),
+        radius,
+        guided,
+      }),
+    );
   }
 
   addExplosion(position, kind) {
@@ -70,13 +87,15 @@ export class Game {
     for (let i = 0; i < 17; i++) {
       const angle = (i / 17) * Math.PI * 2 + this.random() * 0.32;
       const speed = 42 + this.random() * 185;
-      this.world.spawn(makeParticle({
-        position,
-        velocity: new Vector2(Math.cos(angle) * speed, Math.sin(angle) * speed),
-        color,
-        lifetime: 0.25 + this.random() * 0.55,
-        radius: 1 + this.random() * 2.7,
-      }));
+      this.world.spawn(
+        makeParticle({
+          position,
+          velocity: new Vector2(Math.cos(angle) * speed, Math.sin(angle) * speed),
+          color,
+          lifetime: 0.25 + this.random() * 0.55,
+          radius: 1 + this.random() * 2.7,
+        }),
+      );
     }
   }
 
@@ -93,7 +112,10 @@ export class Game {
     if (dy > ARENA.height / 2) dy -= ARENA.height;
     if (dy < -ARENA.height / 2) dy += ARENA.height;
     const desiredAngle = Math.atan2(dx, -dy);
-    const difference = Math.atan2(Math.sin(desiredAngle - this.enemy.angle), Math.cos(desiredAngle - this.enemy.angle));
+    const difference = Math.atan2(
+      Math.sin(desiredAngle - this.enemy.angle),
+      Math.cos(desiredAngle - this.enemy.angle),
+    );
     this.enemy.setControls({
       thrust: Math.hypot(dx, dy) > 135,
       turnLeft: difference < -0.09,
@@ -119,7 +141,9 @@ export class Game {
     if (this.enemy === null) {
       this.enemyRespawnIn = Math.max(0, this.enemyRespawnIn - dt);
       if (this.enemyRespawnIn === 0) {
-        this.enemy = this.world.spawn(new Ship({ position: new Vector2(940, 130), team: 'enemy', hp: 2 }));
+        this.enemy = this.world.spawn(
+          new Ship({ position: new Vector2(940, 130), team: 'enemy', hp: 2 }),
+        );
         this.enemy.angle = Math.PI;
       }
     }
@@ -165,7 +189,9 @@ export class Game {
     if (this.pickupTimer >= 8) {
       this.pickupTimer -= 8;
       if ([...this.world.ofKind('pickup')].length === 0) {
-        this.world.spawn(makePickup(new Vector2(180 + this.random() * 740, 100 + this.random() * 470)));
+        this.world.spawn(
+          makePickup(new Vector2(180 + this.random() * 740, 100 + this.random() * 470)),
+        );
       }
     }
     return events;

@@ -5,7 +5,14 @@ import { Vector2 } from './vector2.js';
 export class Entity {
   static #id = 0;
 
-  constructor({ position = new Vector2(), velocity = new Vector2(), radius = 10, kind = 'entity', behaviors = [], team = 'neutral' } = {}) {
+  constructor({
+    position = new Vector2(),
+    velocity = new Vector2(),
+    radius = 10,
+    kind = 'entity',
+    behaviors = [],
+    team = 'neutral',
+  } = {}) {
     if (!(position instanceof Vector2) || !(velocity instanceof Vector2)) {
       throw new TypeError('Entity position and velocity must be Vector2 values');
     }
@@ -21,7 +28,9 @@ export class Entity {
     this.alive = true;
   }
 
-  kill() { this.alive = false; }
+  kill() {
+    this.alive = false;
+  }
 
   update(dt, world) {
     this.previousPosition = this.position;

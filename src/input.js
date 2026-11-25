@@ -4,7 +4,17 @@ const KEY_MAP = new Map([
   ['ArrowDown', 'KeyS'],
   ['ArrowRight', 'KeyD'],
 ]);
-const CONTROL_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space']);
+const CONTROL_KEYS = new Set([
+  'KeyW',
+  'KeyA',
+  'KeyS',
+  'KeyD',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Space',
+]);
 
 /** Keeps state private inside a closure; justPressed is edge-triggered. */
 export function createInput(target = window) {
@@ -16,7 +26,10 @@ export function createInput(target = window) {
   }
 
   function onKeyDown(event) {
-    if (CONTROL_KEYS.has(event.code) && !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)) {
+    if (
+      CONTROL_KEYS.has(event.code) &&
+      !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)
+    ) {
       event.preventDefault();
     }
     const key = normalize(event.code);
@@ -38,8 +51,12 @@ export function createInput(target = window) {
   target.addEventListener('blur', clear);
 
   return {
-    isDown(code) { return down.has(normalize(code)); },
-    justPressed(code) { return pressedThisStep.has(normalize(code)); },
+    isDown(code) {
+      return down.has(normalize(code));
+    },
+    justPressed(code) {
+      return pressedThisStep.has(normalize(code));
+    },
     snapshot() {
       return {
         thrust: down.has('KeyW'),
@@ -48,7 +65,9 @@ export function createInput(target = window) {
         brake: down.has('KeyS'),
       };
     },
-    endStep() { pressedThisStep.clear(); },
+    endStep() {
+      pressedThisStep.clear();
+    },
     dispose() {
       target.removeEventListener('keydown', onKeyDown);
       target.removeEventListener('keyup', onKeyUp);

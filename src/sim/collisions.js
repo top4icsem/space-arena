@@ -32,7 +32,8 @@ function resolvePair(world, a, b) {
   if (bullet) {
     const target = bullet === a ? b : a;
     if (target.kind !== 'ship' && target.kind !== 'asteroid') return;
-    if (target.kind === 'ship' && (target.team === bullet.team || target.id === bullet.ownerId)) return;
+    if (target.kind === 'ship' && (target.team === bullet.team || target.id === bullet.ownerId))
+      return;
     if (damageTarget(world, target, bullet)) bullet.kill();
     return;
   }

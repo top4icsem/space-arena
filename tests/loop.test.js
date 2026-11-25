@@ -44,7 +44,7 @@ test('fixed-step loop keeps ~60 simulation steps at 120 render frames/s', () => 
       },
     });
     loop.start();
-    for (let frame = 0; frame <= 120; frame++) runFrame(frame * 1000 / 120);
+    for (let frame = 0; frame <= 120; frame++) runFrame((frame * 1000) / 120);
     assert.equal(renders, 121);
     assert.ok(physicsSteps >= 59 && physicsSteps <= 60);
     assert.ok(alphas.every((alpha) => alpha >= -1e-9 && alpha < 1 + 1e-9));
@@ -56,7 +56,9 @@ test('large stalls are clamped and cannot trigger more than 8 steps in one frame
   withFakeAnimationFrame((runFrame) => {
     let physicsSteps = 0;
     const loop = createLoop({
-      simulate: () => { physicsSteps++; },
+      simulate: () => {
+        physicsSteps++;
+      },
       render: () => {},
     });
     loop.start();

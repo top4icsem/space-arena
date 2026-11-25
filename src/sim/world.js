@@ -38,8 +38,12 @@ export class World {
     }
   }
 
-  [Symbol.iterator]() { return this.entities.values(); }
-  emit(event) { this.events.push(event); }
+  [Symbol.iterator]() {
+    return this.entities.values();
+  }
+  emit(event) {
+    this.events.push(event);
+  }
 
   step(dt) {
     if (!Number.isFinite(dt) || dt < 0) throw new RangeError('Invalid world timestep');

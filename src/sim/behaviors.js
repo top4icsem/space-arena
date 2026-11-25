@@ -4,8 +4,12 @@ import { Vector2 } from './vector2.js';
 export function ttl(seconds) {
   let remaining = seconds;
   return {
-    get remaining() { return remaining; },
-    get fraction() { return Math.max(0, Math.min(1, remaining / seconds)); },
+    get remaining() {
+      return remaining;
+    },
+    get fraction() {
+      return Math.max(0, Math.min(1, remaining / seconds));
+    },
     update(entity, dt) {
       remaining -= dt;
       if (remaining <= 0) entity.kill();
@@ -35,7 +39,8 @@ export function homing({ target, turnRate = 2.7, speed = 140 }) {
       if (dy < -height / 2) dy += height;
       const desired = new Vector2(dx, dy);
       if (desired.length < 1e-9) return;
-      const current = entity.velocity.length > 1e-9 ? entity.velocity.normalized() : desired.normalized();
+      const current =
+        entity.velocity.length > 1e-9 ? entity.velocity.normalized() : desired.normalized();
       const aim = desired.normalized();
       const cross = current.x * aim.y - current.y * aim.x;
       const dot = current.x * aim.x + current.y * aim.y;

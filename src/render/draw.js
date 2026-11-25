@@ -37,17 +37,25 @@ function buildBackdrop() {
   ctx.strokeStyle = 'rgba(114, 154, 211, .055)';
   ctx.lineWidth = 1;
   for (let x = 0; x <= width; x += 44) {
-    ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, height); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, height);
+    ctx.stroke();
   }
   for (let y = 0; y <= height; y += 44) {
-    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(width, y + 0.5); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(width, y + 0.5);
+    ctx.stroke();
   }
 
   ctx.strokeStyle = 'rgba(116, 182, 226, .09)';
   ctx.setLineDash([5, 12]);
   ctx.lineWidth = 1;
   for (const radius of [120, 245, 370]) {
-    ctx.beginPath(); ctx.arc(width / 2, height / 2, radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(width / 2, height / 2, radius, 0, Math.PI * 2);
+    ctx.stroke();
   }
   ctx.setLineDash([]);
 
@@ -66,11 +74,17 @@ function buildBackdrop() {
     const size = 0.45 + random() * 1.5;
     const alpha = 0.13 + random() * 0.6;
     ctx.fillStyle = `rgba(178, 213, 255, ${alpha})`;
-    ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
     if (i % 23 === 0) {
-      ctx.strokeStyle = `rgba(174, 207, 246, ${alpha * .7})`;
-      ctx.beginPath(); ctx.moveTo(x - 5, y); ctx.lineTo(x + 5, y);
-      ctx.moveTo(x, y - 5); ctx.lineTo(x, y + 5); ctx.stroke();
+      ctx.strokeStyle = `rgba(174, 207, 246, ${alpha * 0.7})`;
+      ctx.beginPath();
+      ctx.moveTo(x - 5, y);
+      ctx.lineTo(x + 5, y);
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x, y + 5);
+      ctx.stroke();
     }
   }
 
@@ -108,10 +122,16 @@ function drawOneShip(ctx, x, y, angle, thrusting, timestamp) {
 
   ctx.strokeStyle = 'rgba(85, 211, 250, .18)';
   ctx.lineWidth = 1.3;
-  ctx.beginPath(); ctx.arc(0, 0, 39, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 39, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.strokeStyle = 'rgba(85, 211, 250, .32)';
-  ctx.beginPath(); ctx.arc(0, 0, 39, Math.PI * 1.72, Math.PI * 1.93); ctx.stroke();
-  ctx.beginPath(); ctx.arc(0, 0, 39, Math.PI * 0.72, Math.PI * .93); ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 39, Math.PI * 1.72, Math.PI * 1.93);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 39, Math.PI * 0.72, Math.PI * 0.93);
+  ctx.stroke();
 
   if (thrusting) drawThrust(ctx, timestamp);
 
@@ -144,10 +164,17 @@ function drawOneShip(ctx, x, y, angle, thrusting, timestamp) {
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = '#68ebf9';
-  ctx.beginPath(); ctx.ellipse(0, -3, 3.2, 9, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, -3, 3.2, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.strokeStyle = '#247ea7';
   ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(-14, 15); ctx.lineTo(-7, 9); ctx.moveTo(14, 15); ctx.lineTo(7, 9); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-14, 15);
+  ctx.lineTo(-7, 9);
+  ctx.moveTo(14, 15);
+  ctx.lineTo(7, 9);
+  ctx.stroke();
   ctx.fillStyle = '#7ef2ff';
   ctx.fillRect(-4, 13, 8, 4);
   ctx.restore();
@@ -169,11 +196,12 @@ function drawAsteroid(ctx, entity, x, y, timestamp) {
   ctx.lineWidth = 1.8;
   ctx.beginPath();
   for (let i = 0; i < 9; i++) {
-    const angle = i * Math.PI * 2 / 9;
+    const angle = (i * Math.PI * 2) / 9;
     const radius = r * (0.82 + 0.15 * Math.sin(i * 7.4 + entity.id));
     const px = Math.cos(angle) * radius;
     const py = Math.sin(angle) * radius;
-    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
   }
   ctx.closePath();
   ctx.fill();
@@ -181,13 +209,15 @@ function drawAsteroid(ctx, entity, x, y, timestamp) {
   ctx.shadowBlur = 0;
   ctx.strokeStyle = entity.guided ? '#f69c72' : '#728ba5';
   ctx.beginPath();
-  ctx.ellipse(-r * .21, -r * .1, r * .23, r * .12, .4, 0, Math.PI * 2);
-  ctx.moveTo(r * .12, r * .25);
-  ctx.arc(r * .1, r * .21, r * .2, 0, 1.9 * Math.PI);
+  ctx.ellipse(-r * 0.21, -r * 0.1, r * 0.23, r * 0.12, 0.4, 0, Math.PI * 2);
+  ctx.moveTo(r * 0.12, r * 0.25);
+  ctx.arc(r * 0.1, r * 0.21, r * 0.2, 0, 1.9 * Math.PI);
   ctx.stroke();
   if (entity.guided) {
     ctx.fillStyle = '#ffac6c';
-    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.restore();
 }
@@ -201,26 +231,35 @@ function drawBullet(ctx, entity, x, y) {
   ctx.lineWidth = entity.guided ? 3.5 : 2.5;
   const direction = entity.velocity.normalized();
   ctx.beginPath();
-  ctx.moveTo(x - direction.x * (entity.guided ? 17 : 13), y - direction.y * (entity.guided ? 17 : 13));
+  ctx.moveTo(
+    x - direction.x * (entity.guided ? 17 : 13),
+    y - direction.y * (entity.guided ? 17 : 13),
+  );
   ctx.lineTo(x + direction.x * 5, y + direction.y * 5);
   ctx.stroke();
-  ctx.beginPath(); ctx.arc(x, y, entity.radius, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x, y, entity.radius, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 
 function drawPickup(ctx, x, y, timestamp) {
   ctx.save();
   ctx.translate(x, y);
-  const pulse = 1 + Math.sin(timestamp / 230) * .14;
+  const pulse = 1 + Math.sin(timestamp / 230) * 0.14;
   ctx.scale(pulse, pulse);
   ctx.rotate(Math.PI / 4);
-  ctx.shadowColor = '#80ffb8'; ctx.shadowBlur = 26;
-  ctx.fillStyle = '#163b37'; ctx.strokeStyle = '#88ffc9'; ctx.lineWidth = 3;
+  ctx.shadowColor = '#80ffb8';
+  ctx.shadowBlur = 26;
+  ctx.fillStyle = '#163b37';
+  ctx.strokeStyle = '#88ffc9';
+  ctx.lineWidth = 3;
   ctx.fillRect(-12, -12, 24, 24);
   ctx.strokeRect(-12, -12, 24, 24);
   ctx.rotate(-Math.PI / 4);
   ctx.fillStyle = '#8dffbd';
-  ctx.fillRect(-3, -9, 6, 18); ctx.fillRect(-9, -3, 18, 6);
+  ctx.fillRect(-3, -9, 6, 18);
+  ctx.fillRect(-9, -3, 18, 6);
   ctx.restore();
 }
 
@@ -235,7 +274,8 @@ function drawEntity(ctx, entity, alpha, timestamp) {
       if (px < -65 || px > ARENA.width + 65 || py < -65 || py > ARENA.height + 65) continue;
       if (entity.kind === 'ship') {
         ctx.save();
-        if (entity.invincibleFor > 0) ctx.globalAlpha = 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(timestamp / 120));
+        if (entity.invincibleFor > 0)
+          ctx.globalAlpha = 0.76 + 0.24 * (0.5 + 0.5 * Math.sin(timestamp / 120));
         if (entity.team === 'enemy') ctx.filter = 'hue-rotate(148deg) saturate(1.5)';
         drawOneShip(ctx, px, py, entity.angle, entity.thrusting, timestamp);
         ctx.restore();
@@ -248,7 +288,9 @@ function drawEntity(ctx, entity, alpha, timestamp) {
         ctx.fillStyle = entity.color;
         ctx.shadowColor = entity.color;
         ctx.shadowBlur = 9;
-        ctx.beginPath(); ctx.arc(px, py, entity.radius, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath();
+        ctx.arc(px, py, entity.radius, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
       }
     }

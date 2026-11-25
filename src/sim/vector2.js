@@ -9,12 +9,24 @@ export class Vector2 {
     Object.freeze(this);
   }
 
-  add(other) { return new Vector2(this.x + other.x, this.y + other.y); }
-  subtract(other) { return new Vector2(this.x - other.x, this.y - other.y); }
-  scale(scalar) { return new Vector2(this.x * scalar, this.y * scalar); }
-  get length() { return Math.hypot(this.x, this.y); }
-  normalized() { return this.length === 0 ? new Vector2() : this.scale(1 / this.length); }
-  distanceTo(other) { return this.subtract(other).length; }
+  add(other) {
+    return new Vector2(this.x + other.x, this.y + other.y);
+  }
+  subtract(other) {
+    return new Vector2(this.x - other.x, this.y - other.y);
+  }
+  scale(scalar) {
+    return new Vector2(this.x * scalar, this.y * scalar);
+  }
+  get length() {
+    return Math.hypot(this.x, this.y);
+  }
+  normalized() {
+    return this.length === 0 ? new Vector2() : this.scale(1 / this.length);
+  }
+  distanceTo(other) {
+    return this.subtract(other).length;
+  }
   rotated(radians) {
     const cos = Math.cos(radians);
     const sin = Math.sin(radians);
