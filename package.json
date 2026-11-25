@@ -31,7 +31,8 @@
     "bench:clients": "node scripts/load-clients.mjs",
     "bench:world": "node --disable-warning=ExperimentalWarning --experimental-strip-types scripts/bench-world.mjs",
     "bench:browser": "node scripts/profile-browser.mjs",
-    "bench:worker": "node scripts/benchmark-worker.mjs"
+    "bench:worker": "node scripts/benchmark-worker.mjs",
+    "dev:e2e": "node scripts/dev-e2e.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
