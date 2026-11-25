@@ -6,13 +6,15 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 export default [
   {
     ignores: [
-      '**/dist/**',
-      '**/node_modules/**',
-      '**/coverage/**',
-      '**/logs/**',
-      '.lab04_patch/**',
-      '.lab05_patch/**',
-    ],
+  '**/dist/**',
+  '**/node_modules/**',
+  '**/coverage/**',
+  '**/logs/**',
+  '**/playwright-report/**',
+  '**/test-results/**',
+  '.lab04_patch/**',
+  '.lab05_patch/**',
+],
   },
   js.configs.recommended,
   {
