@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SocketConnection } from '../src/network/connection.js';
+import { SocketConnection } from '../src/network/connection.ts';
 
 class FakeSocket extends EventTarget {
   static CONNECTING = 0;

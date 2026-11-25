@@ -1,9 +1,6 @@
 node_modules/
-client/dist/
-server/logs/
+**/dist/
 coverage/
 package-lock.json
 client/public/assets/data/broken.json
-
 dist/
-**/dist/

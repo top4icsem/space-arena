@@ -1,10 +1,70 @@
-import { ARENA, STEP, createShip, advance, wrapCoordinate } from './flight.js';
-import { createRandom } from './prng.js';
-const distance2 = (a, b) => {
+import { ARENA, STEP, createShip, advance, wrapCoordinate } from './flight.ts';
+import { entityId, inputSeq, stepId } from './types.ts';
+import type {
+  Controls,
+  EntityId,
+  InputSeq,
+  Snapshot,
+  PlayerRecord,
+  BulletRecord,
+  AsteroidRecord,
+  PickupRecord,
+} from './types.ts';
+import { createRandom } from './prng.ts';
+const distance2 = (a: { x: number; y: number }, b: { x: number; y: number }): number => {
   const dx = Math.abs(a.x - b.x),
     dy = Math.abs(a.y - b.y);
   return Math.min(dx, ARENA.width - dx) ** 2 + Math.min(dy, ARENA.height - dy) ** 2;
 };
+export interface MutablePlayer {
+  id: EntityId;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  angle: number;
+  thrusting: boolean;
+  hp: number;
+  score: number;
+  alive: boolean;
+  respawn: number;
+  cooldown: number;
+  input: Controls;
+  pending: { seq: InputSeq; input: Controls }[];
+  ack: InputSeq;
+  invincible: number;
+}
+interface BulletState {
+  id: EntityId;
+  ownerId: EntityId;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  ttl: number;
+  guided: boolean;
+}
+interface AsteroidState {
+  id: EntityId;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  radius: number;
+  hp: number;
+  guided: boolean;
+}
+interface PickupState {
+  id: EntityId;
+  x: number;
+  y: number;
+  taken?: boolean;
+}
+export type WorldEvent =
+  | { type: 'fired' | 'respawn' | 'collected'; player: EntityId }
+  | { type: 'hit' | 'exploded'; player: EntityId; by: EntityId }
+  | { type: 'hit' | 'exploded'; asteroid: EntityId; by: EntityId }
+  | { type: 'hit' | 'exploded'; player: EntityId; asteroid: EntityId };
 export const emptyControls = Object.freeze({
   thrust: false,
   turnLeft: false,
@@ -15,12 +75,21 @@ export const emptyControls = Object.freeze({
 });
 /** The authoritative world has deterministic state transitions. No timers, DOM or Node imports. */
 export class SharedWorld {
-  constructor({ seed = 12345, asteroidCount = 5 } = {}) {
+  seed: number;
+  random: () => number;
+  tick: number;
+  nextEntity: number;
+  players: Map<EntityId, MutablePlayer>;
+  bullets: BulletState[];
+  asteroids: AsteroidState[];
+  pickups: PickupState[];
+  pickupCooldown: number;
+  constructor({ seed = 12345, asteroidCount = 5 }: { seed?: number; asteroidCount?: number } = {}) {
     this.seed = seed >>> 0;
     this.random = createRandom(this.seed);
     this.tick = 0;
     this.nextEntity = 1;
-    this.players = new Map();
+    this.players = new Map<EntityId, MutablePlayer>();
     this.bullets = [];
     this.asteroids = [];
     this.pickups = [];
@@ -29,7 +98,7 @@ export class SharedWorld {
     this.spawnPickup();
   }
   spawnAsteroid() {
-    const id = this.nextEntity++;
+    const id = entityId(this.nextEntity++);
     const x = 60 + this.random() * (ARENA.width - 120),
       y = 60 + this.random() * (ARENA.height - 120);
     const theta = this.random() * Math.PI * 2,
@@ -47,19 +116,19 @@ export class SharedWorld {
   }
   spawnPickup() {
     this.pickups.push({
-      id: this.nextEntity++,
+      id: entityId(this.nextEntity++),
       x: 70 + this.random() * 960,
       y: 70 + this.random() * 540,
     });
   }
-  addPlayer(id) {
+  addPlayer(id: EntityId): MutablePlayer {
     if (this.players.has(id)) throw new Error('Already in world');
     const slot = this.players.size;
     const state = createShip((170 + slot * 310) % ARENA.width, (170 + slot * 195) % ARENA.height);
-    state.angle = (slot % 2) * Math.PI;
-    const player = {
+    const player: MutablePlayer = {
       id,
       ...state,
+      angle: (slot % 2) * Math.PI,
       hp: 3,
       score: 0,
       alive: true,
@@ -67,16 +136,20 @@ export class SharedWorld {
       cooldown: 0,
       input: emptyControls,
       pending: [],
-      ack: 0,
+      ack: inputSeq(0),
       invincible: 1.2,
     };
     this.players.set(id, player);
     return player;
   }
-  removePlayer(id) {
+  removePlayer(id: EntityId): void {
     this.players.delete(id);
   }
-  queueInput(id, { seq, mask }, maskToControls) {
+  queueInput(
+    id: EntityId,
+    { seq, mask }: { seq: InputSeq; mask: number },
+    maskToControls: (mask: number) => Controls,
+  ): boolean {
     const p = this.players.get(id);
     if (!p || seq <= p.ack || !Number.isSafeInteger(seq) || seq > 0xffffffff) return false;
     if (p.pending.length >= 90) {
@@ -86,13 +159,13 @@ export class SharedWorld {
     p.pending.push({ seq, input: maskToControls(mask) });
     return true;
   }
-  shoot(p) {
+  shoot(p: MutablePlayer): BulletState | null {
     if (p.cooldown > 0 || !p.alive) return null;
     const forwardX = Math.sin(p.angle),
       forwardY = -Math.cos(p.angle);
     const velocity = p.input.guided ? 390 : 525;
     const bullet = {
-      id: this.nextEntity++,
+      id: entityId(this.nextEntity++),
       ownerId: p.id,
       x: wrapCoordinate(p.x + 30 * forwardX, ARENA.width),
       y: wrapCoordinate(p.y + 30 * forwardY, ARENA.height),
@@ -105,13 +178,14 @@ export class SharedWorld {
     p.cooldown = p.input.guided ? 0.36 : 0.19;
     return bullet;
   }
-  step() {
+  step(): WorldEvent[] {
     this.tick++;
-    const events = [];
+    const events: WorldEvent[] = [];
     for (const p of this.players.values()) {
-      while (p.pending.length && p.pending[0].seq <= p.ack) p.pending.shift();
+      while ((p.pending[0]?.seq ?? Infinity) <= p.ack) p.pending.shift();
       if (p.pending.length) {
         const next = p.pending.shift();
+        if (!next) continue;
         p.ack = next.seq;
         p.input = next.input;
       }
@@ -243,11 +317,12 @@ export class SharedWorld {
     for (let i = 0; i < destroyed; i++) this.spawnAsteroid();
     return events;
   }
-  snapshot(ack = 0) {
+  snapshot(ack: InputSeq = inputSeq(0)): Snapshot {
     return {
-      tick: this.tick,
+      tick: stepId(this.tick),
       ack,
-      players: [...this.players.values()].map((p) => ({
+      players: [...this.players.values()].map((p): PlayerRecord => ({
+        kind: 'ship',
         id: p.id,
         x: p.x,
         y: p.y,
@@ -260,7 +335,8 @@ export class SharedWorld {
         score: p.score,
         respawn: p.respawn,
       })),
-      bullets: this.bullets.map(({ id, ownerId, x, y, vx, vy, guided }) => ({
+      bullets: this.bullets.map(({ id, ownerId, x, y, vx, vy, guided }): BulletRecord => ({
+        kind: 'bullet',
         id,
         ownerId,
         x,
@@ -269,7 +345,8 @@ export class SharedWorld {
         vy,
         guided,
       })),
-      asteroids: this.asteroids.map(({ id, x, y, radius, hp, guided }) => ({
+      asteroids: this.asteroids.map(({ id, x, y, radius, hp, guided }): AsteroidRecord => ({
+        kind: 'asteroid',
         id,
         x,
         y,
@@ -277,7 +354,7 @@ export class SharedWorld {
         hp,
         guided,
       })),
-      pickups: this.pickups.map(({ id, x, y }) => ({ id, x, y })),
+      pickups: this.pickups.map(({ id, x, y }): PickupRecord => ({ kind: 'pickup', id, x, y })),
     };
   }
 }

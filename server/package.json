@@ -1,11 +1,11 @@
 {
   "name": "@space-arena/server",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file-if-exists=../.env --watch src/index.js",
-    "start": "node --env-file-if-exists=../.env src/index.js"
+    "dev": "node --disable-warning=ExperimentalWarning --experimental-strip-types --env-file-if-exists=../.env --watch src/index.ts",
+    "start": "node --disable-warning=ExperimentalWarning --experimental-strip-types --env-file-if-exists=../.env src/index.ts"
   },
   "dependencies": {
     "ws": "^8.18.3"

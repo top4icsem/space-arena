@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NetworkGame } from '../../client/src/network/netcode.js';
-import { SharedWorld } from '../world.js';
-import { maskToControls } from '../codec.js';
+import { NetworkGame } from '../../client/src/network/netcode.ts';
+import { SharedWorld } from '../world.ts';
+import { maskToControls } from '../codec.ts';
 
 test('Prediction replays only unacknowledged inputs and matches authority with no loss', () => {
   const connection = { status: 'connected', sendInput: () => 7, send: () => true };

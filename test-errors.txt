@@ -1,0 +1,119 @@
+
+> space-arena@0.6.0 test
+> node --disable-warning=ExperimentalWarning --experimental-strip-types --test client/tests/*.test.js server/test/*.test.js shared/test/*.test.js shared/test/*.test.ts server/test/*.test.ts
+
+✔ fetchJson validates HTTP ok and rejects 404 without retrying (29.8325ms)
+✔ withRetry backs off on transient HTTP 503 then fulfills (3.602334ms)
+✔ bad JSON rejects with SyntaxError and is not swallowed (1.178542ms)
+✔ loadAll starts all file promises concurrently and tracks each settlement (1.30225ms)
+✔ abort cancels retry delays immediately (0.319459ms)
+✔ delay supports an external AbortSignal (0.183083ms)
+✔ fetchResponse timeout does not hang forever (32.848042ms)
+✔ Connection sends join first, buffers chat and flushes on acknowledgement (18.952458ms)
+✔ Connection rejects an unsuccessful join and stops reconnecting (0.682666ms)
+✔ Vector2 arithmetic is pure and returns new frozen vectors (1.706625ms)
+✔ Vector2 rotations and forward vector preserve Lab 01 up direction (0.224333ms)
+✔ entity ids are private, sequential and never reused after sweep (0.242834ms)
+✔ Ship inherits exactly one level, carries private hp with public getter (0.233958ms)
+✔ Ship moves through original pure integrate() physics, controls are copied (0.345542ms)
+✔ Ship.fire starts at nose, has inherited velocity, TTL and cooldown (0.303458ms)
+✔ World keeps Map, generator, iteration and marked despawns until sweep (0.476208ms)
+✔ World.step validates dt, applies updates, and sweeps an expired bullet (0.25375ms)
+✔ circle collisions correctly check wrap-around edges (0.395916ms)
+✔ player bullet destroys asteroid and both are removed at end of step (0.522125ms)
+✔ bullets hit rival ships but not their own team (1.58875ms)
+✔ stationary pickup is composed from Entity + collectible behavior (0.514833ms)
+✔ homing is the same composable behavior on bullet and asteroid (0.732792ms)
+✔ TTL and collectible are feature objects, not classes (0.148334ms)
+✔ game initializes playable entities and fixed seeded layouts (0.305125ms)
+✔ game adds score, particles and removes destroyed asteroid (0.373791ms)
+✔ game respawns player after 2 seconds when killed (0.259375ms)
+✔ input closure tracks pressed and edge-triggered keys separately (0.8995ms)
+✔ arrow keys alias to WASD and snapshot remains plain data (0.129875ms)
+✔ blur clears keys and dispose removes all listeners (0.93775ms)
+✔ Lobby emits rooms, joins with selected room, and stops polling (30.065ms)
+✔ Lobby aborts an outstanding request on leave (0.356417ms)
+✔ game emits fired and keeps physics independent of audio and DOM (0.74275ms)
+✔ collision sends both hit and exploded through EventTarget (0.870708ms)
+✔ fixed-step loop keeps ~60 simulation steps at 120 render frames/s (1.970791ms)
+✔ large stalls are clamped and cannot trigger more than 8 steps in one frame (0.266667ms)
+✔ the loop does not continue scheduling frames after stop (0.216375ms)
+✔ ship begins at the specified location and zero velocity (0.759375ms)
+✔ integrate is pure and does not mutate the source or the input (0.187541ms)
+✔ zero timestep leaves the numerical state unchanged (0.083416ms)
+✔ ship accelerates forward (up) when angle is zero (0.063834ms)
+✔ opposite turn inputs cancel (0.056833ms)
+✔ maximum speed is respected under prolonged thrust (2.522125ms)
+✔ brake reduces velocity faster than ordinary drag (0.059125ms)
+✔ invalid timestep is rejected (0.176583ms)
+✔ arena wraps both positive and negative positions (0.077583ms)
+✔ interpolation takes the shortest route across an arena boundary (0.112958ms)
+✔ angle interpolation crosses 360 degrees by the short arc (0.200917ms)
+✔ interpolated ship has expected position and heading (0.156666ms)
+✔ identical input sequences result in identical final states (1.574334ms)
+✔ Static path guard rejects encoded traversal (including backslash) (0.398625ms)
+✔ NDJSON Transform + pipeline roundtrips structured events (12.853542ms)
+✔ HTTP API health/rooms/create, built client and stream replay (56.655125ms)
+✔ Lab 05: three seeded lobbies remain after last player leaves; custom rooms disappear (3.392917ms)
+✔ Scheduler catches up to a target clock without setInterval and stops cleanly (0.130458ms)
+✔ Config validates env integers and log directory (5.1095ms)
+✔ Protocol accepts versioned join/chat/leave, rejects invalid shape, oversize and unknown types (1.100125ms)
+✔ Room emits join, chat, leave, empty in order and manager removes empty room (0.821875ms)
+✔ Room caps players and manager caps rooms (0.265833ms)
+[ws protocol] Unknown or malformed message
+✖ Two live WS clients join one room, receive roster and broadcast chat (15.434458ms)
+✖ Lab 05: two players receive binary snapshots and server moves only after input (68.496667ms)
+
+Interrupted while running:
+
+⚠ server/test/websocket.test.js (server/test/websocket.test.js:1:1)
+⚠ server/test/zod-protocol-lab06.test.ts (server/test/zod-protocol-lab06.test.ts:1:1)
+⚠ shared/test/flight-codec.test.js (shared/test/flight-codec.test.js:1:1)
+⚠ shared/test/netcode.test.js (shared/test/netcode.test.js:1:1)
+⚠ shared/test/types-lab06.test.ts (shared/test/types-lab06.test.ts:1:1)
+✖ server/test/websocket.test.js (72343.823375ms)
+✔ Zod rejects bad JSON, unknown types and extra fields at the WebSocket boundary (1.645875ms)
+✔ Zod accepts the validated shape and preserves tagged type (0.10625ms)
+✔ Zod validates environment config before startup (0.732333ms)
+✔ same controls yield bit-identical trajectories with shared browser/Node physics (5.940583ms)
+✔ PRNG seeded generator produces identical sequences (0.268125ms)
+✔ DataView input is 7 bytes, LE seq, valid control mask (1.110875ms)
+✔ Snapshot roundtrip retains players, bullets, rocks, pickups, and angle quantization (1.98975ms)
+✔ Authoritative world is deterministic for identical seed and input seq stream (7.721208ms)
+✔ Authoritative world rejects stale input seq and accepts progression without coordinates (2.980833ms)
+✔ Prediction replays only unacknowledged inputs and matches authority with no loss (1.723375ms)
+✔ Remote interpolation uses two authoritative snapshots (never remote raw input) (0.20175ms)
+✔ branded IDs are safe at the runtime boundary (1.707ms)
+✔ discriminated kind dispatches to exhaustive handler (0.323625ms)
+ℹ tests 74
+ℹ suites 0
+ℹ pass 71
+ℹ fail 2
+ℹ cancelled 1
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 72409.469833
+
+✖ failing tests:
+
+test at server/test/websocket.test.js:37:1
+✖ Two live WS clients join one room, receive roster and broadcast chat (15.434458ms)
+  Error: The server is not running
+      at WebSocketServer.<anonymous> (/Users/top4icsem/Downloads/space-arena-lab-02/node_modules/ws/lib/websocket-server.js:176:14)
+      at WebSocketServer.wrapper (node:events:639:12)
+      at WebSocketServer.emit (node:events:514:20)
+      at emitClose (/Users/top4icsem/Downloads/space-arena-lab-02/node_modules/ws/lib/websocket-server.js:487:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+
+test at server/test/websocket.test.js:73:1
+✖ Lab 05: two players receive binary snapshots and server moves only after input (68.496667ms)
+  Error: The server is not running
+      at WebSocketServer.<anonymous> (/Users/top4icsem/Downloads/space-arena-lab-02/node_modules/ws/lib/websocket-server.js:176:14)
+      at WebSocketServer.wrapper (node:events:639:12)
+      at WebSocketServer.emit (node:events:514:20)
+      at emitClose (/Users/top4icsem/Downloads/space-arena-lab-02/node_modules/ws/lib/websocket-server.js:487:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:89:21)
+
+test at server/test/websocket.test.js:1:1
+✖ server/test/websocket.test.js (72343.823375ms)
+  'Promise resolution is still pending but the event loop has already resolved'

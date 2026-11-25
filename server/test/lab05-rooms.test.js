@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { RoomManager } from '../src/rooms.js';
-import { TickScheduler, TICK_MS } from '../src/network/ticker.js';
+import { RoomManager } from '../src/rooms.ts';
+import { TickScheduler, TICK_MS } from '../src/network/ticker.ts';
 
 test('Lab 05: three seeded lobbies remain after last player leaves; custom rooms disappear', () => {
   const manager = new RoomManager();

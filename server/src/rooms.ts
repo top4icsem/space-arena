@@ -1,6 +1,41 @@
 import { EventEmitter } from 'node:events';
+import type { EntityId } from '../../shared/types.ts';
 
-const presets = [
+export type RoomEvent =
+  | {
+      readonly t: number;
+      readonly type: 'join' | 'leave';
+      readonly room: string;
+      readonly player: string;
+      readonly name: string;
+    }
+  | {
+      readonly t: number;
+      readonly type: 'chat';
+      readonly room: string;
+      readonly player: string;
+      readonly name: string;
+      readonly text: string;
+    };
+export interface RoomPlayer {
+  id: string;
+  name: string;
+  netId?: EntityId;
+  wire?: 'binary' | 'json';
+}
+export interface RoomInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly maxPlayers: number;
+  readonly asteroidCount: number;
+  readonly asteroidRespawnSeconds: number;
+}
+export interface RoomOptions extends Partial<RoomInfo> {
+  readonly name: string;
+  readonly persistent?: boolean;
+}
+const presets: readonly RoomOptions[] = [
   {
     id: 'orion',
     name: 'Orion Belt',
@@ -24,27 +59,33 @@ const presets = [
   },
 ];
 export class Room extends EventEmitter {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string;
+  readonly maxPlayers: number;
+  readonly asteroidCount: number;
+  readonly asteroidRespawnSeconds: number;
+  readonly players = new Map<string, RoomPlayer>();
+  persistent = false;
+  logBackpressured = false;
   constructor({
-    id,
+    id = '',
     name,
     description = '',
     maxPlayers = 8,
     asteroidCount = 5,
     asteroidRespawnSeconds = 3.4,
-  }) {
+  }: RoomOptions) {
     super();
-    Object.assign(this, {
-      id,
-      name,
-      description,
-      maxPlayers,
-      asteroidCount,
-      asteroidRespawnSeconds,
-    });
-    this.players = new Map();
-    this.on('error', (error) => console.error(`[Room ${this.id}]`, error));
+    this.id = id;
+    this.name = name;
+    this.description = description;
+    this.maxPlayers = maxPlayers;
+    this.asteroidCount = asteroidCount;
+    this.asteroidRespawnSeconds = asteroidRespawnSeconds;
+    this.on('error', (error: Error) => console.error(`[Room ${this.id}]`, error));
   }
-  get size() {
+  get size(): number {
     return this.players.size;
   }
   snapshot() {
@@ -61,11 +102,23 @@ export class Room extends EventEmitter {
   roster() {
     return [...this.players.values()].map(({ id, name }) => ({ id, name }));
   }
-  join(player) {
+  /** Named typed event API; Node's EventEmitter remains the runtime transport. */
+  onGameEvent(listener: (event: RoomEvent) => void): this {
+    this.on('event', listener);
+    return this;
+  }
+  offGameEvent(listener: (event: RoomEvent) => void): this {
+    this.off('event', listener);
+    return this;
+  }
+  private emitGameEvent(event: RoomEvent): void {
+    this.emit('event', event);
+  }
+  join(player: RoomPlayer): void {
     if (this.players.size >= this.maxPlayers) throw new Error('Room is full');
     this.players.set(player.id, player);
     this.emit('join', player);
-    this.emit('event', {
+    this.emitGameEvent({
       t: Date.now(),
       type: 'join',
       room: this.id,
@@ -73,12 +126,12 @@ export class Room extends EventEmitter {
       name: player.name,
     });
   }
-  leave(id) {
+  leave(id: string): void {
     const player = this.players.get(id);
     if (!player) return;
     this.players.delete(id);
     this.emit('leave', player);
-    this.emit('event', {
+    this.emitGameEvent({
       t: Date.now(),
       type: 'leave',
       room: this.id,
@@ -87,9 +140,9 @@ export class Room extends EventEmitter {
     });
     if (!this.players.size) this.emit('empty');
   }
-  chat(player, message) {
+  chat(player: RoomPlayer, message: string): void {
     if (!this.players.has(player.id)) return;
-    const entry = {
+    const entry: RoomEvent = {
       t: Date.now(),
       type: 'chat',
       room: this.id,
@@ -98,20 +151,33 @@ export class Room extends EventEmitter {
       text: message,
     };
     this.emit('chat', entry);
-    this.emit('event', entry);
+    this.emitGameEvent(entry);
   }
 }
 export class RoomManager extends EventEmitter {
-  constructor({ maxRooms = 24, maxPlayers = 8, seed = true, onRoom } = {}) {
+  readonly rooms = new Map<string, Room>();
+  readonly maxRooms: number;
+  readonly maxPlayers: number;
+  readonly onRoom: ((room: Room) => void) | undefined;
+  constructor({
+    maxRooms = 24,
+    maxPlayers = 8,
+    seed = true,
+    onRoom,
+  }: {
+    maxRooms?: number;
+    maxPlayers?: number;
+    seed?: boolean;
+    onRoom?: (room: Room) => void;
+  } = {}) {
     super();
-    this.rooms = new Map();
     this.maxRooms = maxRooms;
     this.maxPlayers = maxPlayers;
     this.onRoom = onRoom;
-    this.on('error', (error) => console.error('[RoomManager]', error));
+    this.on('error', (error: Error) => console.error('[RoomManager]', error));
     if (seed) for (const item of presets) this.create({ ...item, maxPlayers, persistent: true });
   }
-  create(input) {
+  create(input: RoomOptions): Room {
     if (this.rooms.size >= this.maxRooms) throw new Error('Room limit reached');
     const id = input.id || `sector-${Math.random().toString(36).slice(2, 10)}`;
     if (!/^[a-z0-9-]{1,40}$/.test(id) || this.rooms.has(id))
@@ -136,7 +202,7 @@ export class RoomManager extends EventEmitter {
   list() {
     return [...this.rooms.values()].map((room) => room.snapshot());
   }
-  get(id) {
+  get(id: string) {
     return this.rooms.get(id);
   }
 }

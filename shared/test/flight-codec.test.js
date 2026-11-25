@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { STEP, createShip, advance } from '../flight.js';
-import { createRandom } from '../prng.js';
-import { SharedWorld } from '../world.js';
+import { STEP, createShip, advance } from '../flight.ts';
+import { createRandom } from '../prng.ts';
+import { SharedWorld } from '../world.ts';
 import {
   encodeInput,
   decodeInput,
@@ -10,7 +10,7 @@ import {
   decodeSnapshot,
   controlsToMask,
   maskToControls,
-} from '../codec.js';
+} from '../codec.ts';
 
 test('same controls yield bit-identical trajectories with shared browser/Node physics', () => {
   let a = createShip(550, 340),

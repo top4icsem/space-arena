@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import { createHttpHandler } from '../src/http.js';
-import { RoomManager } from '../src/rooms.js';
+import { RoomManager } from '../src/rooms.ts';
 
 /** Reproducible, isolated 300 ms event-loop stall; no production ws dependency. */
 const manager = new RoomManager({ seed: false });

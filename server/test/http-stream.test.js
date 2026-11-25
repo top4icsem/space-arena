@@ -4,10 +4,10 @@ import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
-import { RoomManager } from '../src/rooms.js';
-import { JsonLinesTransform, MatchLogStore } from '../src/log/matchlog.js';
-import { replayEvents } from '../src/log/replay.js';
-import { createHttpHandler, secureFilePath } from '../src/http.js';
+import { RoomManager } from '../src/rooms.ts';
+import { JsonLinesTransform, MatchLogStore } from '../src/log/matchlog.ts';
+import { replayEvents } from '../src/log/replay.ts';
+import { createHttpHandler, secureFilePath } from '../src/http.ts';
 import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 

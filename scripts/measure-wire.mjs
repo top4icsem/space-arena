@@ -1,5 +1,5 @@
-import { SharedWorld } from '../shared/world.js';
-import { encodeSnapshot, encodeInput, controlsToMask } from '../shared/codec.js';
+import { SharedWorld } from '../shared/world.ts';
+import { encodeSnapshot, encodeInput, controlsToMask } from '../shared/codec.ts';
 const world = new SharedWorld({ seed: 4267, asteroidCount: 5 });
 world.addPlayer(1);
 world.addPlayer(2);

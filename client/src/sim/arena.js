@@ -1,1 +1,1 @@
-export { ARENA, wrapCoordinate, wrapShip } from '../../../shared/flight.js';
+export { ARENA, wrapCoordinate, wrapShip } from '../../../shared/flight.ts';

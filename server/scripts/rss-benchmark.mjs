@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { writeFile, mkdir } from 'node:fs/promises';
-import { streamReplay } from '../src/log/replay.js';
+import { streamReplay } from '../src/log/replay.ts';
 
 const input = Object.fromEntries(
   process.argv.slice(2).map((arg) => arg.replace(/^--/, '').split('=')),

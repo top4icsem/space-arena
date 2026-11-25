@@ -1,8 +1,14 @@
-/* Version 1, byte order LITTLE ENDIAN. Text join/chat remains v=0 JSON from Lab 04.
- * Input: [u8 ver, u8 type=1, u32 seq, u8 mask] = 7 bytes.
- * Snapshot header: [u8 ver, u8 type=2, u32 tick, u32 ack, u8 players,
- *                    u16 bullets, u8 rocks]. Then packed records.
- */
+import { entityId, inputSeq, stepId } from './types.ts';
+import type {
+  Controls,
+  Snapshot,
+  WireInput,
+  PlayerRecord,
+  BulletRecord,
+  AsteroidRecord,
+  PickupRecord,
+} from './types.ts';
+
 export const NET_VERSION = 1;
 export const TYPES = Object.freeze({ INPUT: 1, SNAPSHOT: 2 });
 export const INPUT_BYTES = 7;
@@ -12,14 +18,14 @@ export const BULLET_BYTES = 25;
 export const ROCK_BYTES = 12;
 export const PICKUP_BYTES = 10;
 export const MASK = Object.freeze({ THRUST: 1, LEFT: 2, RIGHT: 4, BRAKE: 8, FIRE: 16, GUIDED: 32 });
-export function angleToInt16(angle) {
+export function angleToInt16(angle: number): number {
   const wrapped = Math.atan2(Math.sin(angle), Math.cos(angle));
   return Math.round((wrapped / Math.PI) * 32767);
 }
-export function int16ToAngle(value) {
+export function int16ToAngle(value: number): number {
   return (value / 32767) * Math.PI;
 }
-export function controlsToMask(input) {
+export function controlsToMask(input: Controls): number {
   return (
     (input.thrust ? MASK.THRUST : 0) |
     (input.turnLeft ? MASK.LEFT : 0) |
@@ -29,7 +35,9 @@ export function controlsToMask(input) {
     (input.guided ? MASK.GUIDED : 0)
   );
 }
-export function maskToControls(mask) {
+export function maskToControls(mask: number): Required<Controls> {
+  if (!Number.isInteger(mask) || mask < 0 || mask > 63)
+    throw new RangeError('Invalid control mask');
   return {
     thrust: Boolean(mask & MASK.THRUST),
     turnLeft: Boolean(mask & MASK.LEFT),
@@ -39,7 +47,7 @@ export function maskToControls(mask) {
     guided: Boolean(mask & MASK.GUIDED),
   };
 }
-export function encodeInput({ seq, mask }) {
+export function encodeInput({ seq, mask }: WireInput): ArrayBuffer {
   if (
     !Number.isSafeInteger(seq) ||
     seq < 0 ||
@@ -57,12 +65,12 @@ export function encodeInput({ seq, mask }) {
   view.setUint8(6, mask);
   return bytes;
 }
-function viewOf(data) {
+function viewOf(data: ArrayBuffer | ArrayBufferView): DataView {
   if (data instanceof ArrayBuffer) return new DataView(data);
   if (ArrayBuffer.isView(data)) return new DataView(data.buffer, data.byteOffset, data.byteLength);
   throw new TypeError('Expected ArrayBuffer or a view');
 }
-export function decodeInput(data) {
+export function decodeInput(data: ArrayBuffer | ArrayBufferView): WireInput {
   const view = viewOf(data);
   if (
     view.byteLength !== INPUT_BYTES ||
@@ -73,13 +81,10 @@ export function decodeInput(data) {
   const seq = view.getUint32(2, true),
     mask = view.getUint8(6);
   if (mask & ~63) throw new Error('Invalid input flags');
-  return { seq, mask };
+  return { seq: inputSeq(seq), mask };
 }
-export function encodeSnapshot(frame) {
-  const players = frame.players || [],
-    bullets = frame.bullets || [],
-    asteroids = frame.asteroids || [],
-    pickups = frame.pickups || [];
+export function encodeSnapshot(frame: Snapshot): ArrayBuffer {
+  const { players, bullets, asteroids, pickups } = frame;
   if (
     players.length > 255 ||
     bullets.length > 65535 ||
@@ -96,30 +101,30 @@ export function encodeSnapshot(frame) {
   );
   const v = new DataView(buffer);
   let i = 0;
-  const u8 = (x) => {
+  const u8 = (x: number) => {
     v.setUint8(i, x);
     i += 1;
   };
-  const u16 = (x) => {
+  const u16 = (x: number) => {
     v.setUint16(i, x, true);
     i += 2;
   };
-  const u32 = (x) => {
+  const u32 = (x: number) => {
     v.setUint32(i, x >>> 0, true);
     i += 4;
   };
-  const f32 = (x) => {
+  const f32 = (x: number) => {
     v.setFloat32(i, x, true);
     i += 4;
   };
-  const i16 = (x) => {
+  const i16 = (x: number) => {
     v.setInt16(i, x, true);
     i += 2;
   };
   u8(NET_VERSION);
   u8(TYPES.SNAPSHOT);
   u32(frame.tick);
-  u32(frame.ack ?? 0);
+  u32(frame.ack);
   u8(players.length);
   u16(bullets.length);
   u8(asteroids.length);
@@ -134,8 +139,8 @@ export function encodeSnapshot(frame) {
     u8(p.hp);
     u16(p.score);
     u8((p.alive ? 1 : 0) | (p.thrusting ? 2 : 0));
-    u16(Math.round(Math.max(0, p.respawn ?? 0) * 1000));
-    u8(0); // reserved, fixed player record size 29
+    u16(Math.round(Math.max(0, p.respawn) * 1000));
+    u8(0);
   }
   for (const b of bullets) {
     u32(b.id);
@@ -162,7 +167,7 @@ export function encodeSnapshot(frame) {
     throw new Error(`Snapshot packing mismatch ${i} != ${buffer.byteLength}`);
   return buffer;
 }
-export function decodeSnapshot(data) {
+export function decodeSnapshot(data: ArrayBuffer | ArrayBufferView): Snapshot {
   const v = viewOf(data);
   if (
     v.byteLength < HEADER_BYTES ||
@@ -196,8 +201,8 @@ export function decodeSnapshot(data) {
     i += 2;
     return x;
   };
-  const tick = u32(),
-    ack = u32(),
+  const tick = stepId(u32()),
+    ack = inputSeq(u32()),
     pCount = u8(),
     bCount = u16(),
     aCount = u8(),
@@ -209,9 +214,9 @@ export function decodeSnapshot(data) {
     aCount * ROCK_BYTES +
     pickupCount * PICKUP_BYTES;
   if (v.byteLength !== expected) throw new Error('Snapshot length mismatch');
-  const players = [];
+  const players: PlayerRecord[] = [];
   for (let j = 0; j < pCount; j++) {
-    const id = u32(),
+    const id = entityId(u32()),
       x = f32(),
       y = f32(),
       vx = f32(),
@@ -223,6 +228,7 @@ export function decodeSnapshot(data) {
       respawn = u16() / 1000;
     u8();
     players.push({
+      kind: 'ship',
       id,
       x,
       y,
@@ -236,27 +242,54 @@ export function decodeSnapshot(data) {
       respawn,
     });
   }
-  const bullets = [];
+  const bullets: BulletRecord[] = [];
   for (let j = 0; j < bCount; j++)
     bullets.push({
-      id: u32(),
-      ownerId: u32(),
+      kind: 'bullet',
+      id: entityId(u32()),
+      ownerId: entityId(u32()),
       x: f32(),
       y: f32(),
       vx: f32(),
       vy: f32(),
       guided: Boolean(u8()),
     });
-  const asteroids = [];
+  const asteroids: AsteroidRecord[] = [];
   for (let j = 0; j < aCount; j++) {
-    const id = u16(),
+    const id = entityId(u16()),
       x = f32(),
       y = f32(),
       radius = u8(),
       packed = u8();
-    asteroids.push({ id, x, y, radius, hp: packed & 127, guided: Boolean(packed & 128) });
+    asteroids.push({
+      kind: 'asteroid',
+      id,
+      x,
+      y,
+      radius,
+      hp: packed & 127,
+      guided: Boolean(packed & 128),
+    });
   }
-  const pickups = [];
-  for (let j = 0; j < pickupCount; j++) pickups.push({ id: u16(), x: f32(), y: f32() });
+  const pickups: PickupRecord[] = [];
+  for (let j = 0; j < pickupCount; j++)
+    pickups.push({ kind: 'pickup', id: entityId(u16()), x: f32(), y: f32() });
+  // Defensive decoder: reject NaN/Infinity even when the buffer length and version were correct.
+  for (const item of [...players, ...bullets, ...asteroids, ...pickups]) {
+    if (
+      !Number.isFinite(item.x) ||
+      !Number.isFinite(item.y) ||
+      item.x < 0 ||
+      item.x > 1100 ||
+      item.y < 0 ||
+      item.y > 680
+    )
+      throw new Error('Snapshot coordinate out of range');
+  }
+  for (const p of players)
+    if (![p.vx, p.vy, p.angle].every(Number.isFinite))
+      throw new Error('Invalid player velocity/angle');
+  for (const b of bullets)
+    if (![b.vx, b.vy].every(Number.isFinite)) throw new Error('Invalid bullet velocity');
   return { tick, ack, players, bullets, asteroids, pickups };
 }

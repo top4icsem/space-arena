@@ -11,8 +11,8 @@ import { createAudioController } from './audio/audio.js';
 import { Lobby } from './lobby/lobby.js';
 import { createLobbyView } from './lobby/view.js';
 import { drawLoading, drawLoadError } from './ui/loading.js';
-import { SocketConnection } from './network/connection.js';
-import { NetworkGame } from './network/netcode.js';
+import { SocketConnection } from './network/connection.ts';
+import { NetworkGame } from './network/netcode.ts';
 
 const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(window.location.search);

@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { RoomManager } from '../src/rooms.js';
-import { attachWebSockets } from '../src/ws.js';
+import { RoomManager } from '../src/rooms.ts';
+import { attachWebSockets } from '../src/ws.ts';
 import { WebSocket } from 'ws';
-import { encodeInput, decodeSnapshot } from '../../shared/codec.js';
+import { encodeInput, decodeSnapshot } from '../../shared/codec.ts';
 
 const next = (ws, type, timeout = 1500) =>
   new Promise((resolve, reject) => {

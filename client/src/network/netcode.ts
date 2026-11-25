@@ -1,9 +1,25 @@
-import { STEP, ARENA, advance, wrapCoordinate } from '../../../shared/flight.js';
-import { controlsToMask } from '../../../shared/codec.js';
+import { STEP, ARENA, advance, wrapCoordinate } from '../../../shared/flight.ts';
+import { entityId, inputSeq } from '../../../shared/types.ts';
+import type {
+  Controls,
+  EntityId,
+  FlightState,
+  InputSeq,
+  PlayerRecord,
+  Snapshot,
+  Vector2,
+} from '../../../shared/types.ts';
+import { controlsToMask } from '../../../shared/codec.ts';
 import { lerpWrapped, lerpAngle } from '../render/interpolate.js';
 
-const lerp = (a, b, t) => a + (b - a) * t;
-const interpolated = (a, b, t) => ({
+const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+const interpolated = <
+  T extends FlightState | { x: number; y: number; vx?: number; vy?: number; angle?: number },
+>(
+  a: T,
+  b: T,
+  t: number,
+): T => ({
   ...b,
   x: lerpWrapped(a.x, b.x, t, ARENA.width),
   y: lerpWrapped(a.y, b.y, t, ARENA.height),
@@ -11,13 +27,24 @@ const interpolated = (a, b, t) => ({
   vy: lerp(a.vy ?? 0, b.vy ?? 0, t),
   angle: lerpAngle(a.angle ?? 0, b.angle ?? 0, t),
 });
-const shortest = (a, b, span) => {
+const shortest = (a: number, b: number, span: number): number => {
   let d = a - b;
   if (d > span / 2) d -= span;
   if (d < -span / 2) d += span;
   return d;
 };
-const drawn = (kind, obj) => ({
+const drawn = (
+  kind: 'ship' | 'bullet' | 'asteroid' | 'pickup',
+  obj: {
+    id?: number;
+    x: number;
+    y: number;
+    vx?: number;
+    vy?: number;
+    angle?: number;
+    radius?: number;
+  },
+) => ({
   ...obj,
   kind,
   team: kind === 'ship' ? 'enemy' : 'player',
@@ -26,9 +53,78 @@ const drawn = (kind, obj) => ({
   previousPosition: { x: obj.x, y: obj.y },
   velocity: { x: obj.vx ?? 0, y: obj.vy ?? 0 },
 });
+interface ConnectionSender {
+  status: string;
+  sendInput(seq: InputSeq, mask: number): number;
+  send(type: string, detail?: Record<string, unknown>): boolean;
+}
+interface PendingInput {
+  seq: InputSeq;
+  controls: Controls;
+}
+interface GhostBullet {
+  id: number;
+  ownerId: EntityId;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  guided: boolean;
+  ttl: number;
+}
+interface NetDraw {
+  kind: 'ship' | 'bullet' | 'asteroid' | 'pickup';
+  team: string;
+  radius: number;
+  position: Vector2;
+  previousPosition: Vector2;
+  velocity: Vector2;
+  [key: string]: unknown;
+}
+interface NetworkOptions {
+  prediction?: boolean;
+  divergence?: boolean;
+  interpolationMs?: number;
+  latency?: number;
+  jitter?: number;
+  loss?: number;
+  random?: () => number;
+}
 export class NetworkGame {
+  connection: ConnectionSender;
+  prediction: boolean;
+  divergence: boolean;
+  interpolationMs: number;
+  latency: number;
+  jitter: number;
+  loss: number;
+  random: () => number;
+  id: EntityId;
+  nextSeq: number;
+  accumulator: number;
+  pending: PendingInput[];
+  predicted: PlayerRecord | null;
+  authoritative: PlayerRecord | null;
+  frames: Snapshot[];
+  offset: { x: number; y: number };
+  lastRx: number;
+  rtt: number | null;
+  lastCorrection: number;
+  ghostBullets: GhostBullet[];
+  scheduled: Set<ReturnType<typeof setTimeout>>;
+  bytesOut: number;
+  bytesIn: number;
+  previousBytesOut: number;
+  previousBytesIn: number;
+  bytesUpdated: number;
+  outRate: number;
+  inRate: number;
+  probeAt: number;
+  eventBus: EventTarget | null;
+  lastFireAt: number;
+
   constructor(
-    connection,
+    connection: ConnectionSender,
     {
       prediction = true,
       divergence = false,
@@ -37,7 +133,7 @@ export class NetworkGame {
       jitter = 0,
       loss = 0,
       random = Math.random,
-    } = {},
+    }: NetworkOptions = {},
   ) {
     this.connection = connection;
     this.prediction = prediction;
@@ -47,7 +143,7 @@ export class NetworkGame {
     this.jitter = Math.max(0, jitter);
     this.loss = Math.max(0, Math.min(1, loss));
     this.random = random;
-    this.id = 0;
+    this.id = entityId(0);
     this.nextSeq = 1;
     this.accumulator = 0;
     this.pending = [];
@@ -74,7 +170,7 @@ export class NetworkGame {
   reset() {
     for (const task of this.scheduled) clearTimeout(task);
     this.scheduled.clear();
-    this.id = 0;
+    this.id = entityId(0);
     this.nextSeq = 1;
     this.accumulator = 0;
     this.pending = [];
@@ -87,11 +183,11 @@ export class NetworkGame {
     this.rtt = null;
     this.lastCorrection = 0;
   }
-  joined(payload) {
+  joined(payload: { netId: number }): void {
     this.reset();
-    this.id = payload.netId;
+    this.id = entityId(payload.netId);
   }
-  schedule(fn, extraDelay = 0) {
+  schedule(fn: () => void, extraDelay = 0) {
     // Artificial network latency and jitter are strictly transport-side, never in integrate().
     const ms = Math.max(0, this.latency / 2 + (this.random() * 2 - 1) * this.jitter + extraDelay);
     if (ms < 1) {
@@ -104,13 +200,13 @@ export class NetworkGame {
     }, ms);
     this.scheduled.add(task);
   }
-  receive(payload, byteLength) {
+  receive(payload: Snapshot, byteLength: number) {
     if (!this.id) return;
     this.bytesIn += byteLength;
     if (this.random() < this.loss) return; // demo: dropped snapshot
     this.schedule(() => this.applySnapshot(payload));
   }
-  applySnapshot(frame) {
+  applySnapshot(frame: Snapshot) {
     const fresh = this.frames.at(-1);
     if (fresh && frame.tick <= fresh.tick) return; // old jittered snapshot
     this.lastRx = performance.now();
@@ -136,13 +232,16 @@ export class NetworkGame {
       this.offset = { x: dx, y: dy };
     }
   }
-  predictStep(state, controls) {
+  predictStep(state: PlayerRecord, controls: Controls): PlayerRecord {
     const next = advance(state, controls, STEP);
     // Deliberately BAD demonstration: ?diverge=1 / toggle. Disabled in normal operation.
-    if (this.divergence) next.x = wrapCoordinate(next.x + (this.random() - 0.5) * 8, ARENA.width);
-    return { ...state, ...next };
+    return {
+      ...state,
+      ...next,
+      x: this.divergence ? wrapCoordinate(next.x + (this.random() - 0.5) * 8, ARENA.width) : next.x,
+    };
   }
-  simulate(dt, controls) {
+  simulate(dt: number, controls: Controls): void {
     this.offset.x *= Math.exp(-dt / 0.1);
     this.offset.y *= Math.exp(-dt / 0.1);
     for (const bullet of this.ghostBullets) {
@@ -156,7 +255,7 @@ export class NetworkGame {
       this.accumulator -= STEP;
       if (!this.id) continue;
       const mask = controlsToMask(controls),
-        seq = this.nextSeq++;
+        seq = inputSeq(this.nextSeq++);
       if (this.predicted && this.prediction && this.authoritative?.alive) {
         this.pending.push({ seq, controls: { ...controls } });
         this.predicted = this.predictStep(this.predicted, controls);
@@ -186,11 +285,12 @@ export class NetworkGame {
       this.bytesUpdated = now;
     }
   }
-  localBullet(controls) {
+  localBullet(controls: Controls): void {
     if (performance.now() - this.lastFireAt < (controls.guided ? 360 : 190)) return;
     this.lastFireAt = performance.now();
-    const p = this.predicted,
-      sx = Math.sin(p.angle),
+    const p = this.predicted;
+    if (!p) return;
+    const sx = Math.sin(p.angle),
       sy = -Math.cos(p.angle);
     this.ghostBullets.push({
       id: -this.nextSeq,
@@ -199,14 +299,14 @@ export class NetworkGame {
       y: wrapCoordinate(p.y + sy * 30, ARENA.height),
       vx: p.vx + sx * 520,
       vy: p.vy + sy * 520,
-      guided: controls.guided,
+      guided: Boolean(controls.guided),
       ttl: 0.24,
     });
     this.eventBus?.dispatchEvent(
       new CustomEvent('fired', { detail: { team: 'player', guided: controls.guided } }),
     );
   }
-  getVisualState() {
+  getVisualState(): PlayerRecord | null {
     if (!this.predicted) return null;
     return {
       ...this.predicted,
@@ -214,11 +314,11 @@ export class NetworkGame {
       y: wrapCoordinate(this.predicted.y + this.offset.y, ARENA.height),
     };
   }
-  interpolate(frameA, frameB, t) {
+  interpolate(frameA: Snapshot | null, frameB: Snapshot | null, t: number): NetDraw[] | null {
     const earlier = frameA || frameB,
       later = frameB || earlier;
     if (!earlier || !later) return null;
-    const objects = [];
+    const objects: NetDraw[] = [];
     for (const p of later.players) {
       if (p.id === this.id || !p.alive) continue;
       const a = earlier.players.find((o) => o.id === p.id) || p;
@@ -240,17 +340,19 @@ export class NetworkGame {
   getWorld() {
     if (!this.frames.length) return { [Symbol.iterator]: function* () {}, *ofKind() {} };
     const latest = this.frames.at(-1);
+    if (!latest) return { [Symbol.iterator]: function* () {}, *ofKind() {} };
     // Advance along the tick timeline continuously between packet arrivals.
     // The historical 120 ms buffer normally keeps the target bracketed by snapshots.
     const tickMs = 1000 / 30;
     const progressed = Math.min(2.5, Math.max(0, (performance.now() - this.lastRx) / tickMs));
     const targetTick = latest.tick + progressed - this.interpolationMs / tickMs;
-    let a = this.frames[0],
-      b = latest;
+    let a: Snapshot = this.frames[0] ?? latest,
+      b: Snapshot = latest;
     for (let i = 1; i < this.frames.length; i++) {
-      if (this.frames[i].tick >= targetTick) {
-        a = this.frames[i - 1];
-        b = this.frames[i];
+      const current = this.frames[i];
+      if (current && current.tick >= targetTick) {
+        a = this.frames[i - 1] ?? current;
+        b = current;
         break;
       }
     }
@@ -268,7 +370,7 @@ export class NetworkGame {
       [Symbol.iterator]: function* () {
         yield* entities;
       },
-      *ofKind(kind) {
+      *ofKind(kind: 'ship' | 'bullet' | 'asteroid' | 'pickup') {
         yield* entities.filter((entity) => entity.kind === kind);
       },
     };

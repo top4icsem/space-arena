@@ -1,4 +1,5 @@
-/** Browser/Node identical movement function. No DOM, Node, wall-clock or randomness. */
+import type { ArenaSize, Controls, FlightState } from './types.ts';
+
 export const SHIP_PHYSICS = Object.freeze({
   acceleration: 315,
   rotationRate: Math.PI * 0.93,
@@ -6,22 +7,23 @@ export const SHIP_PHYSICS = Object.freeze({
   brakeDrag: 3.8,
   maximumSpeed: 385,
 });
-export const ARENA = Object.freeze({ width: 1100, height: 680 });
+export const ARENA: ArenaSize = Object.freeze({ width: 1100, height: 680 });
 export const STEP = 1 / 30;
-export function createShip(x, y) {
+export function createShip(x: number, y: number): FlightState {
   return { x, y, vx: 0, vy: 0, angle: 0, thrusting: false };
 }
-export function wrapCoordinate(value, size) {
+export function wrapCoordinate(value: number, size: number): number {
   return ((value % size) + size) % size;
 }
-export function wrapShip(ship, arena = ARENA) {
+export function wrapShip(ship: FlightState, arena: ArenaSize = ARENA): FlightState {
   return {
     ...ship,
     x: wrapCoordinate(ship.x, arena.width),
     y: wrapCoordinate(ship.y, arena.height),
   };
 }
-export function integrate(ship, input, dt) {
+/** Pure integration; fixed-step and exactly the same formulas as Lab 05. */
+export function integrate(ship: FlightState, input: Controls, dt: number): FlightState {
   if (!Number.isFinite(dt) || dt < 0) throw new RangeError('Invalid dt');
   const direction = Number(Boolean(input.turnRight)) - Number(Boolean(input.turnLeft));
   const angle = ship.angle + direction * SHIP_PHYSICS.rotationRate * dt;
@@ -47,6 +49,11 @@ export function integrate(ship, input, dt) {
     thrusting,
   };
 }
-export function advance(ship, controls, dt = STEP, arena = ARENA) {
+export function advance(
+  ship: FlightState,
+  controls: Controls,
+  dt = STEP,
+  arena: ArenaSize = ARENA,
+): FlightState {
   return wrapShip(integrate(ship, controls, dt), arena);
 }

@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
-import { Room, RoomManager } from '../src/rooms.js';
-import { ProtocolError, parseClientMessage } from '../src/protocol.js';
-import { readConfig } from '../src/config.js';
+import { Room, RoomManager } from '../src/rooms.ts';
+import { ProtocolError, parseClientMessage } from '../src/protocol.ts';
+import { readConfig } from '../src/config.ts';
 
 test('Config validates env integers and log directory', () => {
   assert.equal(readConfig({ PORT: '3001', LOG_DIR: 'logs' }, '/tmp').port, 3001);
