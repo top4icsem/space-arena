@@ -3,8 +3,9 @@ import { Entity } from './entity.js';
 import { resolveCollisions } from './collisions.js';
 
 export class World {
-  constructor({ arena = ARENA } = {}) {
+  constructor({ arena = ARENA, onSwept = null } = {}) {
     this.arena = arena;
+    this.onSwept = onSwept;
     this.entities = new Map();
     this.time = 0;
     this.events = [];
@@ -28,7 +29,10 @@ export class World {
 
   sweep() {
     for (const [id, entity] of this.entities) {
-      if (!entity.alive) this.entities.delete(id);
+      if (!entity.alive) {
+        this.entities.delete(id);
+        this.onSwept?.(entity);
+      }
     }
   }
 

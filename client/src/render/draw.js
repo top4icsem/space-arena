@@ -9,7 +9,7 @@ function seededRandom(seed) {
   };
 }
 
-function buildBackdrop() {
+function buildBackdrop(starData = null) {
   const canvas = document.createElement('canvas');
   canvas.width = ARENA.width;
   canvas.height = ARENA.height;
@@ -69,10 +69,10 @@ function buildBackdrop() {
 
   const random = seededRandom(103053);
   for (let i = 0; i < 164; i++) {
-    const x = random() * width;
-    const y = random() * height;
-    const size = 0.45 + random() * 1.5;
-    const alpha = 0.13 + random() * 0.6;
+    const x = starData ? starData[i * 4] : random() * width;
+    const y = starData ? starData[i * 4 + 1] : random() * height;
+    const size = starData ? starData[i * 4 + 2] : 0.45 + random() * 1.5;
+    const alpha = starData ? starData[i * 4 + 3] : 0.13 + random() * 0.6;
     ctx.fillStyle = `rgba(178, 213, 255, ${alpha})`;
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
@@ -342,10 +342,13 @@ function drawEntity(ctx, entity, alpha, timestamp, sprites) {
 }
 
 export function createRenderer(surface, { sprites = {} } = {}) {
-  const backdrop = buildBackdrop();
+  let backdrop = buildBackdrop();
   const { ctx } = surface;
 
   return {
+    setStarfield(values) {
+      backdrop = buildBackdrop(values);
+    },
     render(previous, current, alpha, timestamp, world = null) {
       surface.beginFrame();
       ctx.drawImage(backdrop, 0, 0);

@@ -25,7 +25,13 @@ export class Game {
   }
 
   reset() {
-    this.world = new World();
+    this.particlePool = [];
+    this.world = new World({
+      onSwept: (entity) => {
+        if (entity.kind === 'particle' && this.particlePool.length < 512)
+          this.particlePool.push(entity);
+      },
+    });
     this.random = seededRandomGame(4267);
     this.score = 0;
     this.destroyedAsteroids = 0;
@@ -95,15 +101,22 @@ export class Game {
     for (let i = 0; i < 17; i++) {
       const angle = (i / 17) * Math.PI * 2 + this.random() * 0.32;
       const speed = 42 + this.random() * 185;
-      this.world.spawn(
-        makeParticle({
-          position,
-          velocity: new Vector2(Math.cos(angle) * speed, Math.sin(angle) * speed),
-          color,
-          lifetime: 0.25 + this.random() * 0.55,
-          radius: 1 + this.random() * 2.7,
-        }),
-      );
+      const velocity = new Vector2(Math.cos(angle) * speed, Math.sin(angle) * speed);
+      const lifetime = 0.25 + this.random() * 0.55;
+      const radius = 1 + this.random() * 2.7;
+      const particle = this.particlePool.pop();
+      if (particle) {
+        particle.position = position;
+        particle.previousPosition = position;
+        particle.velocity = velocity;
+        particle.radius = radius;
+        particle.color = color;
+        particle.alive = true;
+        particle.ttl.reset(lifetime);
+        this.world.spawn(particle);
+      } else {
+        this.world.spawn(makeParticle({ position, velocity, color, lifetime, radius }));
+      }
     }
   }
 

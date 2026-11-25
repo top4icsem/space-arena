@@ -16,7 +16,7 @@ test('discriminated kind dispatches to exhaustive handler', () => {
 });
 // TypeScript must reject these lines when @ts-expect-error is removed.
 function compileTimeProof(_id: EntityId, _seq: InputSeq, _point: Vector2): void {
-  if (_point.x === Number.POSITIVE_INFINITY) {
+  if (Math.random() < -1) {
     // @ts-expect-error InputSeq is not EntityId
     const invalidId: EntityId = _seq;
     // @ts-expect-error Vector2 fields are readonly

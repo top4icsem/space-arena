@@ -18,6 +18,7 @@ interface Credentials {
   readonly name: string;
   readonly room: string;
   readonly wire: 'binary' | 'json';
+  readonly bots?: number;
 }
 interface PendingJoin {
   resolve: (message: JoinedMessage) => void;
@@ -96,10 +97,11 @@ export class SocketConnection extends EventTarget {
     name: string,
     room: string,
     wire: 'binary' | 'json' = 'binary',
+    bots = 0,
   ): Promise<JoinedMessage> {
     this.disconnect();
     this.wire = wire;
-    this.credentials = { v: 0, type: 'join', name, room, wire };
+    this.credentials = { v: 0, type: 'join', name, room, wire, bots };
     this.manual = false;
     this.attempt = 0;
     return new Promise<JoinedMessage>((resolve, reject) => {

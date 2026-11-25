@@ -27,6 +27,7 @@ export const JoinSchema = z
     room: printable(1, 40),
     name: printable(1, 20),
     wire: z.enum(['binary', 'json']).optional(),
+    bots: z.number().int().min(0).max(8).optional(),
   })
   .strict();
 export const ChatSchema = z

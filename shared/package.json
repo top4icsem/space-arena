@@ -2,6 +2,9 @@
   "name": "@space-arena/shared",
   "private": true,
   "type": "module",
-  "version": "0.6.0",
-  "description": "Browser/Node pure deterministic simulation and DataView wire format"
+  "version": "0.7.0",
+  "description": "Browser/Node pure deterministic simulation and DataView wire format",
+  "scripts": {
+    "test": "vitest run -c vitest.config.ts"
+  }
 }

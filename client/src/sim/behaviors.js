@@ -10,6 +10,10 @@ export function ttl(seconds) {
     get fraction() {
       return Math.max(0, Math.min(1, remaining / seconds));
     },
+    reset(nextSeconds = seconds) {
+      seconds = nextSeconds;
+      remaining = nextSeconds;
+    },
     update(entity, dt) {
       remaining -= dt;
       if (remaining <= 0) entity.kill();

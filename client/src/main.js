@@ -13,6 +13,7 @@ import { createLobbyView } from './lobby/view.js';
 import { drawLoading, drawLoadError } from './ui/loading.js';
 import { SocketConnection } from './network/connection.ts';
 import { NetworkGame } from './network/netcode.ts';
+import { generateStarsInWorker } from './perf/starfield.js';
 
 const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(window.location.search);
@@ -63,7 +64,7 @@ const lobbyView = createLobbyView($('#lobby-overlay'), {
     audio.unlock();
     try {
       lobbyView.error('Joining live Node.js room…');
-      const welcome = await connection.join(name, roomId, wire);
+      const welcome = await connection.join(name, roomId, wire, params.get('bots') === '8' ? 8 : 0);
       netGame.joined(welcome);
       lobby.join(name, roomId);
     } catch (error) {
@@ -317,6 +318,7 @@ async function boot() {
     });
     if (signal.aborted) return;
     renderer = createRenderer(surface, { sprites: resources.images });
+    if (window.__lab07Starfield) renderer.setStarfield(window.__lab07Starfield.stars);
     audio.setBuffers(resources.audio);
     await showLobby();
   } catch (error) {
@@ -393,6 +395,17 @@ $('#retry-assets').addEventListener('click', () => {
   next.searchParams.delete('failure');
   failureMode = null;
   history.replaceState(null, '', next);
+  // This is an opt-in worker experiment. Normal launch uses the faster synchronous cached backdrop.
+  if (params.get('worker') === '1') {
+    void generateStarsInWorker()
+      .then(({ stars, totalMs, workerMs }) => {
+        // When resources finish, the renderer is replaced; use a hook to apply the atlas on boot.
+        window.__lab07Starfield = { stars, totalMs, workerMs };
+        renderer?.setStarfield(stars);
+        console.info('[Lab07] Worker starfield', { totalMs, workerMs });
+      })
+      .catch((error) => console.warn('[Lab07] Worker experiment unavailable', error));
+  }
   void boot();
 });
 $('#pause-button').addEventListener('click', () => setPaused(!paused));
@@ -465,6 +478,9 @@ window.__spaceArenaDebug = Object.freeze({
     stats: netGame.stats,
     netId: netGame.id,
     players: netGame.frames.at(-1)?.players.length ?? 0,
+    remoteShips: (netGame.frames.at(-1)?.players || [])
+      .filter((p) => p.id !== netGame.id)
+      .map((p) => ({ id: p.id, x: p.x, y: p.y })),
   }),
   // Measurements only; explicitly opt in from DevTools, not run in normal boot.
   compareAssetLoading: () => measureLoading(manifest),
@@ -473,6 +489,17 @@ window.__spaceArenaDebug = Object.freeze({
   },
 });
 
+// This is an opt-in worker experiment. Normal launch uses the faster synchronous cached backdrop.
+if (params.get('worker') === '1') {
+  void generateStarsInWorker()
+    .then(({ stars, totalMs, workerMs }) => {
+      // When resources finish, the renderer is replaced; use a hook to apply the atlas on boot.
+      window.__lab07Starfield = { stars, totalMs, workerMs };
+      renderer?.setStarfield(stars);
+      console.info('[Lab07] Worker starfield', { totalMs, workerMs });
+    })
+    .catch((error) => console.warn('[Lab07] Worker experiment unavailable', error));
+}
 void boot();
 window.addEventListener('pagehide', () => {
   loadingController?.abort();

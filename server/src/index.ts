@@ -17,12 +17,14 @@ const manager = new RoomManager({
     void logs.attach(room).catch((error: unknown) => room.emit('error', error));
   },
 });
+let getMetrics: () => unknown = () => ({ ready: false });
 const server = createServer(
   createHttpHandler({
     rooms: manager,
     logs,
     distDir: resolve(root, 'client/dist'),
     slowDemo: config.slowDemo,
+    metrics: () => getMetrics(),
   }),
 );
 server.on('error', (error: Error) => {
@@ -30,10 +32,11 @@ server.on('error', (error: Error) => {
   process.exitCode = 1;
 });
 const sockets = attachWebSockets(server, manager, config);
+getMetrics = () => sockets.realTime.performance;
 server.listen(config.port, config.host, () => {
   const address = server.address();
   console.log(
-    `[Space Arena Lab 06] http://${config.host}:${typeof address === 'object' && address ? address.port : config.port} | rooms=${manager.list().length}`,
+    `[Space Arena Lab 07] http://${config.host}:${typeof address === 'object' && address ? address.port : config.port} | rooms=${manager.list().length}`,
   );
   console.log('[HTTP] GET /health, GET/POST /api/rooms, GET /api/replays/:id | [WS] /ws');
 });

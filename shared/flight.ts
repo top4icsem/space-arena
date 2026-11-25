@@ -57,3 +57,36 @@ export function advance(
 ): FlightState {
   return wrapShip(integrate(ship, controls, dt), arena);
 }
+
+/** Zero-allocation integration for the server hot path. Pure `advance` remains for replay. */
+export function advanceInto<
+  T extends { x: number; y: number; vx: number; vy: number; angle: number; thrusting: boolean },
+>(output: T, ship: FlightState, input: Controls, dt = STEP, arena: ArenaSize = ARENA): T {
+  if (!Number.isFinite(dt) || dt < 0) throw new RangeError('Invalid dt');
+  const direction = Number(Boolean(input.turnRight)) - Number(Boolean(input.turnLeft));
+  const angle = ship.angle + direction * SHIP_PHYSICS.rotationRate * dt;
+  const thrusting = Boolean(input.thrust);
+  const acceleration = thrusting ? SHIP_PHYSICS.acceleration : 0;
+  let vx = ship.vx + Math.sin(angle) * acceleration * dt;
+  let vy = ship.vy - Math.cos(angle) * acceleration * dt;
+  const damping = Math.exp(-(input.brake ? SHIP_PHYSICS.brakeDrag : SHIP_PHYSICS.drag) * dt);
+  vx *= damping;
+  vy *= damping;
+  const speed = Math.hypot(vx, vy);
+  if (speed > SHIP_PHYSICS.maximumSpeed) {
+    const scale = SHIP_PHYSICS.maximumSpeed / speed;
+    vx *= scale;
+    vy *= scale;
+  }
+  // Compute all outputs before writing: output === ship is supported.
+  const x = wrapCoordinate(ship.x + vx * dt, arena.width);
+  const y = wrapCoordinate(ship.y + vy * dt, arena.height);
+  const heading = Math.atan2(Math.sin(angle), Math.cos(angle));
+  output.x = x;
+  output.y = y;
+  output.vx = vx;
+  output.vy = vy;
+  output.angle = heading;
+  output.thrusting = thrusting;
+  return output;
+}

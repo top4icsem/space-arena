@@ -1,0 +1,27 @@
+{
+  "baseline": {
+    "label": "before",
+    "environment": "Node v22.16.0 linux x64",
+    "ticks": 900,
+    "bots": 8,
+    "p50Ms": 0.028922999999991816,
+    "p95Ms": 0.16787300000000016,
+    "p99Ms": 0.2999420000000015,
+    "gcCount": 35,
+    "maxGcPauseMs": 0.6385209988802671,
+    "heapDeltaMb": 2.1786346435546875
+  },
+  "optimized": {
+    "label": "after",
+    "environment": "Node v22.16.0 linux x64",
+    "ticks": 900,
+    "bots": 8,
+    "p50Ms": 0.02691000000001509,
+    "p95Ms": 0.09187800000000834,
+    "p99Ms": 0.26300699999998756,
+    "gcCount": 21,
+    "maxGcPauseMs": 1.663323998451233,
+    "heapDeltaMb": -0.5903701782226562
+  },
+  "parity": true
+}

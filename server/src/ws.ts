@@ -139,6 +139,8 @@ export function attachWebSockets(server: Server, rooms: RoomManager, config: Ser
             joined = true;
             clearTimeout(joinTimer);
             selected.join(member);
+            // Demo bots live in the server world, not in browser prediction.
+            if (msg.bots !== undefined) realTime.enableBots(selected, msg.bots);
             safeSend(
               socket,
               sendable('joined', {
@@ -196,30 +198,19 @@ export function attachWebSockets(server: Server, rooms: RoomManager, config: Ser
   return {
     wss,
     realTime,
-
     async close(): Promise<void> {
       realTime.stop();
       rooms.off('created', addRoom);
-
       for (const socket of wss.clients) {
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.close(1001, 'Server shutting down');
-        } else {
-          socket.terminate();
-        }
+        if (socket.readyState === WebSocket.OPEN) socket.close(1001, 'Server shutting down');
+        else socket.terminate();
       }
-
-      for (const socket of wss.clients) {
-        socket.terminate();
-      }
-
+      await new Promise<void>((resolve) => setTimeout(resolve, 150));
+      for (const socket of wss.clients) socket.terminate();
       await new Promise<void>((resolve, reject) => {
-        wss.close((err) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
+        wss.close((err?: Error) => {
+          if (err) reject(err);
+          else resolve();
         });
       });
     },

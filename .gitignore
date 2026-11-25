@@ -8,3 +8,10 @@ coverage/
 .env.*
 !.env.example
 .lab04_patch/
+
+playwright-report/
+test-results/
+.vite/
+bench-out/
+
+/server/server/logs/

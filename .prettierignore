@@ -4,3 +4,7 @@ coverage/
 package-lock.json
 client/public/assets/data/broken.json
 dist/
+
+playwright-report/
+test-results/
+bench-out/

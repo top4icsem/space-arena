@@ -85,15 +85,19 @@ export function createHttpHandler({
   logs,
   distDir,
   slowDemo = false,
+  metrics,
 }: {
   rooms: RoomManager;
   logs: LogReplaySource;
   distDir: string;
   slowDemo?: boolean;
+  metrics?: () => unknown;
 }): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
   return async (req, res) => {
     try {
       const rawPath = (req.url || '/').split('?')[0] ?? '/';
+      if (rawPath === '/api/perf' && req.method === 'GET')
+        return reply(res, 200, metrics?.() ?? { ready: false });
       if (rawPath === '/health' && req.method === 'GET')
         return reply(res, 200, {
           ok: true,

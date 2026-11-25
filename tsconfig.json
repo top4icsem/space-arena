@@ -13,5 +13,6 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["shared/**/*.ts", "server/src/**/*.ts", "client/src/**/*.ts"]
+  "include": ["shared/**/*.ts", "server/src/**/*.ts", "client/src/**/*.ts"],
+  "exclude": ["e2e/**", "scripts/bench-baseline-world.ts", "node_modules/**"]
 }

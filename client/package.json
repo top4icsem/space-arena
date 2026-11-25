@@ -1,12 +1,13 @@
 {
   "name": "@space-arena/client",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run -c vitest.config.ts"
   },
   "devDependencies": {
     "vite": "^7.2.2"

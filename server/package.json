@@ -1,11 +1,12 @@
 {
   "name": "@space-arena/server",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node --disable-warning=ExperimentalWarning --experimental-strip-types --env-file-if-exists=../.env --watch src/index.ts",
-    "start": "node --disable-warning=ExperimentalWarning --experimental-strip-types --env-file-if-exists=../.env src/index.ts"
+    "start": "node --disable-warning=ExperimentalWarning --experimental-strip-types --env-file-if-exists=../.env src/index.ts",
+    "test": "vitest run -c vitest.config.ts"
   },
   "dependencies": {
     "ws": "^8.18.3"

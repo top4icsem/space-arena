@@ -1,4 +1,4 @@
-import { ARENA, STEP, createShip, advance, wrapCoordinate } from './flight.ts';
+import { ARENA, STEP, createShip, advanceInto, wrapCoordinate } from './flight.ts';
 import { entityId, inputSeq, stepId } from './types.ts';
 import type {
   Controls,
@@ -11,6 +11,7 @@ import type {
   PickupRecord,
 } from './types.ts';
 import { createRandom } from './prng.ts';
+import { ObjectPool } from './pool.ts';
 const distance2 = (a: { x: number; y: number }, b: { x: number; y: number }): number => {
   const dx = Math.abs(a.x - b.x),
     dy = Math.abs(a.y - b.y);
@@ -84,6 +85,19 @@ export class SharedWorld {
   asteroids: AsteroidState[];
   pickups: PickupState[];
   pickupCooldown: number;
+  readonly bulletPool = new ObjectPool<BulletState>(
+    () => ({
+      id: entityId(0),
+      ownerId: entityId(0),
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      ttl: 0,
+      guided: false,
+    }),
+    2048,
+  );
   constructor({ seed = 12345, asteroidCount = 5 }: { seed?: number; asteroidCount?: number } = {}) {
     this.seed = seed >>> 0;
     this.random = createRandom(this.seed);
@@ -164,16 +178,15 @@ export class SharedWorld {
     const forwardX = Math.sin(p.angle),
       forwardY = -Math.cos(p.angle);
     const velocity = p.input.guided ? 390 : 525;
-    const bullet = {
-      id: entityId(this.nextEntity++),
-      ownerId: p.id,
-      x: wrapCoordinate(p.x + 30 * forwardX, ARENA.width),
-      y: wrapCoordinate(p.y + 30 * forwardY, ARENA.height),
-      vx: p.vx + forwardX * velocity,
-      vy: p.vy + forwardY * velocity,
-      ttl: 1.3,
-      guided: Boolean(p.input.guided),
-    };
+    const bullet = this.bulletPool.acquire();
+    bullet.id = entityId(this.nextEntity++);
+    bullet.ownerId = p.id;
+    bullet.x = wrapCoordinate(p.x + 30 * forwardX, ARENA.width);
+    bullet.y = wrapCoordinate(p.y + 30 * forwardY, ARENA.height);
+    bullet.vx = p.vx + forwardX * velocity;
+    bullet.vy = p.vy + forwardY * velocity;
+    bullet.ttl = 1.3;
+    bullet.guided = Boolean(p.input.guided);
     this.bullets.push(bullet);
     p.cooldown = p.input.guided ? 0.36 : 0.19;
     return bullet;
@@ -206,7 +219,7 @@ export class SharedWorld {
         }
         continue;
       }
-      Object.assign(p, advance(p, p.input, STEP));
+      advanceInto(p, p, p.input, STEP);
       if (p.input.fire) {
         const bullet = this.shoot(p);
         if (bullet) events.push({ type: 'fired', player: p.id });
@@ -214,7 +227,13 @@ export class SharedWorld {
     }
     for (const rock of this.asteroids) {
       if (rock.guided && this.players.size) {
-        const victim = [...this.players.values()].find((p) => p.alive);
+        let victim: MutablePlayer | undefined;
+        for (const candidate of this.players.values()) {
+          if (candidate.alive) {
+            victim = candidate;
+            break;
+          }
+        }
         if (victim) {
           const dx = victim.x - rock.x,
             dy = victim.y - rock.y;
@@ -233,9 +252,14 @@ export class SharedWorld {
     }
     for (const bullet of this.bullets) {
       if (bullet.guided) {
-        const target =
-          [...this.players.values()].find((p) => p.alive && p.id !== bullet.ownerId) ||
-          this.asteroids[0];
+        let target: MutablePlayer | AsteroidState | undefined;
+        for (const candidate of this.players.values()) {
+          if (candidate.alive && candidate.id !== bullet.ownerId) {
+            target = candidate;
+            break;
+          }
+        }
+        target ??= this.asteroids[0];
         if (target) {
           const dx = target.x - bullet.x,
             dy = target.y - bullet.y;
@@ -305,15 +329,28 @@ export class SharedWorld {
         }
       }
     }
-    this.pickups = this.pickups.filter((p) => !p.taken);
+    // Compact in place; no new arrays in the 30 Hz hot path.
+    let pickupWrite = 0;
+    for (const pickup of this.pickups) if (!pickup.taken) this.pickups[pickupWrite++] = pickup;
+    this.pickups.length = pickupWrite;
     this.pickupCooldown -= STEP;
     if (this.pickupCooldown <= 0) {
       this.pickupCooldown = 8;
       if (this.pickups.length < 2) this.spawnPickup();
     }
-    this.bullets = this.bullets.filter((b) => b.ttl > 0);
-    const destroyed = this.asteroids.length - this.asteroids.filter((a) => a.hp > 0).length;
-    this.asteroids = this.asteroids.filter((a) => a.hp > 0);
+    let bulletWrite = 0;
+    for (const bullet of this.bullets) {
+      if (bullet.ttl > 0) this.bullets[bulletWrite++] = bullet;
+      else this.bulletPool.release(bullet);
+    }
+    this.bullets.length = bulletWrite;
+    let rockWrite = 0;
+    let destroyed = 0;
+    for (const rock of this.asteroids) {
+      if (rock.hp > 0) this.asteroids[rockWrite++] = rock;
+      else destroyed++;
+    }
+    this.asteroids.length = rockWrite;
     for (let i = 0; i < destroyed; i++) this.spawnAsteroid();
     return events;
   }
