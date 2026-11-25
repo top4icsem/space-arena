@@ -1,0 +1,13 @@
+{
+  "version": 3,
+  "assets": [
+    { "id": "ships", "type": "image", "url": "/assets/sprites/ships.png" },
+    { "id": "asteroids", "type": "image", "url": "/assets/sprites/asteroids.png" },
+    { "id": "bullets", "type": "image", "url": "/assets/sprites/bullets.png" },
+    { "id": "pickups", "type": "image", "url": "/assets/sprites/pickups.png" },
+    { "id": "fire", "type": "audio", "url": "/assets/audio/fire.wav" },
+    { "id": "hit", "type": "audio", "url": "/assets/audio/hit.wav" },
+    { "id": "explosion", "type": "audio", "url": "/assets/audio/explosion.wav" },
+    { "id": "arena-rules", "type": "json", "url": "/assets/data/arena.json" }
+  ]
+}

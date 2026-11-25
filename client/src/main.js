@@ -11,6 +11,7 @@ import { createAudioController } from './audio/audio.js';
 import { Lobby } from './lobby/lobby.js';
 import { createLobbyView } from './lobby/view.js';
 import { drawLoading, drawLoadError } from './ui/loading.js';
+import { SocketConnection } from './network/connection.js';
 
 const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(window.location.search);
@@ -25,6 +26,10 @@ const input = createInput();
 const eventBus = new EventTarget();
 const audio = createAudioController(eventBus);
 const lobby = new Lobby();
+const connection = new SocketConnection();
+const chatStatus = $('#network-status');
+const roster = $('#network-roster');
+const chatMessages = $('#chat-messages');
 let game = null;
 let renderer = null;
 let manifest = null;
@@ -42,13 +47,16 @@ let paused = false;
 let lastHudUpdate = 0;
 
 const lobbyView = createLobbyView($('#lobby-overlay'), {
-  onJoin: (name, roomId) => {
-    // AudioContext is created DIRECTLY in a real user gesture, not during loading.
+  onJoin: async (name, roomId) => {
+    // Unlock Web Audio synchronously in the Join gesture, before any await.
     audio.unlock();
     try {
+      lobbyView.error('Joining live Node.js room…');
+      await connection.join(name, roomId);
       lobby.join(name, roomId);
     } catch (error) {
-      lobbyView.error(error.message);
+      lobbyView.error(`Could not join: ${error.message}`);
+      connection.disconnect();
     }
   },
   onRetry: () => {
@@ -175,6 +183,9 @@ function setPaused(next) {
 }
 
 async function showLobby() {
+  connection.disconnect();
+  roster.replaceChildren();
+  chatMessages.replaceChildren();
   phase = 'lobby';
   loop.stop();
   paused = false;
@@ -270,6 +281,43 @@ async function boot() {
   }
 }
 
+connection.addEventListener('status', ({ detail }) => {
+  chatStatus.textContent = String(detail).toUpperCase();
+});
+connection.addEventListener('roster', ({ detail }) => {
+  roster.replaceChildren();
+  for (const player of detail.players || []) {
+    const name = document.createElement('span');
+    name.className = 'roster-chip';
+    name.textContent = player.name;
+    roster.append(name);
+  }
+});
+connection.addEventListener('chat', ({ detail }) => {
+  const line = document.createElement('div');
+  line.className = 'chat-line';
+  const author = document.createElement('strong');
+  author.textContent = `${detail.name}: `;
+  line.append(author, document.createTextNode(detail.text));
+  chatMessages.append(line);
+  while (chatMessages.children.length > 80) chatMessages.firstChild.remove();
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+});
+connection.addEventListener('error', ({ detail }) => {
+  const line = document.createElement('div');
+  line.className = 'chat-error';
+  line.textContent = detail.message;
+  chatMessages.append(line);
+});
+$('#chat-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const field = $('#chat-input');
+  const text = field.value.trim();
+  if (!text || phase !== 'playing') return;
+  connection.send('chat', { text });
+  field.value = '';
+  canvas.focus({ preventScroll: true });
+});
 $('#retry-assets').addEventListener('click', () => {
   const next = new URL(location.href);
   next.searchParams.delete('failure');
@@ -327,6 +375,11 @@ window.__spaceArenaDebug = Object.freeze({
     room: activeRoom?.id,
     audioUnlocked: audio.unlocked,
   }),
+  getNetwork: () => ({
+    status: connection.status,
+    room: activeRoom?.id,
+    queue: connection.queue.length,
+  }),
   // Measurements only; explicitly opt in from DevTools, not run in normal boot.
   compareAssetLoading: () => measureLoading(manifest),
   returnToLobby: () => {
@@ -339,6 +392,7 @@ window.addEventListener('pagehide', () => {
   loadingController?.abort();
   watcherController?.abort();
   lobby.stop();
+  connection.disconnect();
   loop.stop();
   input.dispose();
   audio.close();

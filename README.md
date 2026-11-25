@@ -1,285 +1,131 @@
-# SPACE ARENA — Lab 03: Async JavaScript, Assets & Lobby
+# SPACE ARENA — Lab 04: Node.js · EventEmitter · Streams · WebSocket
 
-> **Лабораторна №3 — продовження тієї самої Space Arena з ЛР №1–2.** Fixed-step game loop, `Ship extends Entity`, `World`/`Map`, кулі, TTL, колізії, респаун, pickup і homing не вилучено. Додано асинхронне завантаження, PNG-спрайти, Web Audio, події та лобі. У ЛР №3 кімнати — статичний список, **мережевого мультиплеєра поки немає** (це ЛР №4–5).
+> **ЛР №4 у тому самому репозиторії, що й ЛР №1–3.** Клієнтський Canvas, політ, кулі, астероїди, homing, pickup, loading, спрайти й Web Audio залишилися. Додано **Node.js-сервер, живі кімнати, спільний список гравців, WebSocket-чат і потокові NDJSON-реплеї**. Координати/бойову фізику між гравцями **не синхронізуємо**: це предмет ЛР №5.
 
-![Space Arena Lab 03: Canvas loading](docs/preview-lab-03-loading.png)
+![Space Arena Lab 03 gameplay retained](docs/preview-lab-03-game.png)
 
-![Space Arena Lab 03: Lobby](docs/preview-lab-03.png)
-
-## 1. Як запустити й показати викладачу
-
-Потрібен **Node.js 22+**. Працюйте в **тому самому публічному GitHub-репозиторії**, не створюйте новий.
+## 1. Запуск (Mac, Node 22+)
 
 ```bash
 npm install
 npm run dev
 ```
 
-Відкрийте адресу Vite (зазвичай `http://localhost:5173/`). Правильний сценарій:
-
-1. На **Canvas** з'являється реальний progress bar `0/8 → 8/8`; одночасно завантажуються 4 PNG, 3 WAV і 1 JSON.
-2. Лише після `await loadAll(manifest)` з'являється **Lobby**; воно читає `GET /api/rooms` зі статичного файлу `public/api/rooms`, оновлює список кожні 5 с.
-3. Введіть callsign, оберіть `Orion Belt`, `Nebula Run` або `Zenith Drift`; натисніть **Join Mission** — тільки тоді створюється `Game` і починається ігровий цикл. Вибір кімнати змінює кількість/частоту астероїдів.
-4. Керуйте кораблем, стріляйте (`Space`), знищуйте астероїди; почуєте **Web Audio** (після дії Join). Перевірте `Shift + Space` (homing), зелений pickup, HP, бали й 2-секундний респаун.
-5. **Lobby** під Canvas повертає до списку кімнат; коли гравець покинув лобі, `setInterval` скасовується й запит переривається.
-
-| Керування               | Результат                         |
-| ----------------------- | --------------------------------- |
-| `W` / `↑`, `S` / `↓`    | Розгін / гальмо                   |
-| `A` / `←`, `D` / `→`    | Поворот                           |
-| `Space`                 | Постріл із носа корабля зі звуком |
-| `Shift + Space`         | Самонавідні кулі                  |
-| `P`, `R`                | Пауза / перезапуск                |
-| `Sound on/off`, `Lobby` | Звук / повернення до лобі         |
-
-![Space Arena Lab 03: sprite gameplay](docs/preview-lab-03-game.png)
-
-**Контроль якості (перед здачею):**
+**Один термінал** запускає Node API/WebSocket на `http://127.0.0.1:3000` і Vite (зазвичай `http://localhost:5173` або наступний вільний порт). Зайди в адресу **Vite**, яку показав термінал, **у двох окремих вкладках/вікнах**. У кожній після Canvas loading обери **одну й ту саму** кімнату, введи **різні імена** та натисни **Join Mission**. Список гравців стане спільним; відправ повідомлення з першого вікна й побачиш його в обох. Можна літати та стріляти локально: **W/A/S/D, Space, Shift+Space, P, R**. Кнопка Lobby надалі від'єднує WebSocket і повертає до списку кімнат.
 
 ```bash
 npm run format
-npm run check  # eslint + prettier check + всі тести + Vite production build
-# або окремо:
-npm test
-npm run build
+npm run check      # ESLint + Prettier + клієнтські й серверні тести + Vite build
+npm run build      # production client → client/dist
+npm start          # Node віддає той самий production client, /api та /ws на :3000
 ```
 
-> `index.html` не запускайте подвійним кліком через `file://`: `fetch`, ESM і шлях `/api/rooms` потребують локального Vite-сервера.
+> **Не запускайте лише `npm run dev:client`:** Vite спробує проксіювати `/api` й `/ws` до Node. Використовуйте `npm run dev` (обидва процеси). Node сервер — локальна демонстрація, а не публічний хостинг; GitHub зберігає **код**, не запускає його автоматично.
 
-## 2. Структура змін — збережено основу ЛР №1–2
+### Структура репозиторію
 
 ```text
-space-arena/                      ← ТОЙ САМИЙ репозиторій
-├── index.html                    ← overlays для loading errors і lobby
-├── public/
-│   ├── api/rooms                 ← GET /api/rooms, статична відповідь до ЛР №4
-│   └── assets/
-│       ├── manifest.json        ← 8 записів: sprites/audio/json
-│       ├── sprites/             ← ships, asteroids, bullets, pickups (PNG atlases)
-│       ├── audio/               ← fire, hit, explosion (WAV)
-│       └── data/                ← arena.json, broken.json (демо)
-├── src/
-│   ├── main.js                  ← async boot + Join + wiring + збережена фізика
-│   ├── assets/loader.js         ← fetchJson, retry, loadImage/Audio/Json, loadAll
-│   ├── assets/failure-demo.js   ← 4 сценарії відмови (тільки query parameter)
-│   ├── lobby/lobby.js           ← class Lobby extends EventTarget + poll + async iterator
-│   ├── lobby/view.js            ← DOM, вибір кімнати, callsign, кнопки
-│   ├── audio/audio.js           ← Web Audio event subscribers
-│   ├── ui/loading.js            ← графічний Canvas progress bar
-│   ├── sim/game.js              ← старий Game + ін'єкція eventBus/roomConfig
-│   ├── render/draw.js           ← старий Canvas renderer + drawImage(frame, sprite)
-│   ├── input.js, loop.js        ← без змін із попередніх лабораторних
-│   └── sim/інші...              ← Entity, World, вектори, поведінки, колізії
-├── tests/                       ← 36 попередніх + 11 нових = 47 тестів
-└── docs/
-    ├── lab-01-readme.md         ← попередній README першої ЛР
-    ├── lab-02-readme.md         ← попередній README другої ЛР
-    ├── failure-gallery-lab-03.png
-    ├── failure-gallery-lab-03.md
-    ├── reflection-lab-03.md
-    └── defense-lab-03.md
+space-arena/                ← попередній .git, усі теги й історія збережені
+├── package.json            ← npm workspaces: client/ + server/
+├── package-lock.json       ← генерується npm install, закомітити
+├── .env.example            ← змінні оточення
+├── client/
+│   ├── index.html; src/; public/assets/; tests/
+│   ├── vite.config.js       ← dev proxy: /api, /ws → Node
+│   └── src/network/connection.js ← reconnect, bounded send queue
+├── server/
+│   ├── src/index.js         ← HTTP + WS + graceful SIGINT/SIGTERM
+│   ├── src/config.js        ← PORT, HOST, LOG_DIR, limits
+│   ├── src/http.js          ← built client, API, MIME, traversal guard
+│   ├── src/rooms.js         ← EventEmitter rooms + Map
+│   ├── src/protocol.js      ← version v0, parsing, validation
+│   ├── src/ws.js            ← join timeout, ping/pong, tokens, bufferedAmount
+│   ├── src/log/matchlog.js  ← object-mode Transform + pipeline → NDJSON
+│   ├── src/log/replay.js    ← async iterator + pipeline → HTTP response
+│   ├── scripts/            ← RSS and blocking demos
+│   └── test/               ← HTTP, rooms, protocol, WS integration
+├── docs/                   ← порівняння, графік RSS, захист і Reflection
+└── README.md
 ```
 
-**Інваріанти:** `src/sim/*` не імпортує DOM, renderer або `audio.js`. Клас `Game` приймає `eventBus: EventTarget` через конструктор і повідомляє `CustomEvent('fired' | 'hit' | 'exploded')`; `audio.js` слухає ці події. Кораблі, кулі й астероїди в робочому renderer малюються через `ctx.drawImage` з **реальних PNG-спрайтшитів** (96×96 на кадр), а не замінені на телефонні картинки або окремі CSS-фігури. За відсутності ресурсів гра не стартує.
+ESM: усі пакети мають `"type":"module"`, імпорти стандартних модулів записані з префіксом `node:`. У CommonJS натомість `require()`/`module.exports`, синхронне завантаження, змінна `__dirname`. В ESM є статичний `import`/`export`, top-level await і `import.meta.dirname` (для поточного Node); `require()` не є базовим синтаксисом ESM.
 
-## 3. Пайплайн assets: Promises / await / AbortSignal
+## 2. HTTP, кімнати та WebSocket
 
-`public/assets/manifest.json` містить `{ id, type, url }`. `fetchResponse` перевіряє `response.ok` й кидає `HttpError` для 4xx/5xx, `fetchJson` після цього виконує `.json()` і передає `SyntaxError` угору. `loadImage` використовує `fetch → blob → createImageBitmap`, `loadAudio` — `fetch → arrayBuffer → OfflineAudioContext.decodeAudioData`, `loadJson` — спільний `fetchJson`. Всі отримують `AbortSignal`. Звуковий `AudioContext` створюється **після user gesture**, під час натискання Join, а не в `boot`.
+- `GET /health` → `{ok, uptime, rooms}`; `GET /api/rooms` → `{rooms:[...]}` із **реальною** кількістю приєднаних гравців.
+- `POST /api/rooms` → створити кімнату: `curl -X POST http://127.0.0.1:3000/api/rooms -H 'Content-Type: application/json' -d '{"name":"Practice Room"}'`. JSON обмежений 4096 байт; ім'я 2–32 символи, неприпустима форма відкидається. Кількість кімнат і гравців має ліміт.
+- `GET /api/replays/:id` → streaming NDJSON (ідентифікатор файлу без шляху; не `readFile`); `GET /` → production `client/dist/index.html` після `npm run build`. MIME, `Content-Length` й відхилення `..`/URL-encoded traversal перевіряються в `server/src/http.js`.
+- У Vite `/api` проксіюється на Node HTTP, `/ws` — WebSocket Upgrade. Немає старого статичного `client/public/api/rooms` — цей fixture із ЛР №3 прибрано під час міграції.
+- `Room extends EventEmitter`: `join`, `leave`, `chat`, `event`, `empty`; гравці у `Map`. `RoomManager` видаляє **порожню** кімнату, щойно її останній гравець вийшов (початкові кімнати існують, доки їх уперше не використають).
+- Протокол **v0**, тільки JSON текст: `{"v":0,"type":"join","room":"orion","name":"Anna"}` → сервер `joined`, `roster`; `{"v":0,"type":"chat","text":"Привіт"}` → трансляція всім у кімнаті; `leave` закриває з'єднання. **Ніяких координат** у мережевих повідомленнях.
+- Захист: **join за 5 с**, `maxPayload` 2048 байт (змінна `MAX_MESSAGE_BYTES`), неправильний тип/форма → WebSocket close **1008**, завеликий кадр → **1009**, token bucket 12 msg/s (змінний), ping кожні **15 с**, **два пропущені pong** → terminate; при `bufferedAmount > 64 КіБ` відкидаються некритичні повідомлення або закривається повільний клієнт.
+- Браузерний `SocketConnection` ставить `send()` у **обмежену 32 повідомленнями чергу** до встановлення з'єднання, після втрати сокета перепідключається з exponential backoff 0.4–8 с з jitter; після повторного входу `join` повторюється. Імена/чат вставляються як `textContent` (не HTML).
 
-`withRetry` робить максимум **3 спроби** з backoff `180ms, 360ms + jitter 0–35%`; 4xx, parse error і явний Abort **не повторюються**, 5xx/мережеві помилки/таймаути можуть повторюватися. Кожна спроба має власний `AbortSignal.timeout`; зовнішній abort відміняє весь ланцюжок.
+Варіанти налаштування — `.env.example`. Створи `.env`, якщо хочеш змінити `PORT`, `HOST`, `LOG_DIR`, `MAX_ROOMS`, `MAX_PLAYERS`, `RATE_PER_SECOND`, `MAX_MESSAGE_BYTES` або `ENABLE_SLOW_DEMO`. `server/src/config.js` перевіряє числові діапазони; `npm run dev` завантажує `.env` та передає значення **обом** процесам. При `SIGINT`/`SIGTERM`: сервер зупиняє приймання, коректно від'єднує WS-клієнтів, завершує `pipeline` та закриває HTTP із кодом 0 у штатному випадку.
 
-```js
-const manifest = await fetchJson('/assets/manifest.json', { signal });
-const assets = await loadAll(manifest, {
-  signal,
-  onProgress: ({ completed, total, file }) => drawLoading(surface, { completed, total, file }),
-});
-// Promise.all виконується всередині loadAll, після await ресурси вже готові.
-// Після цього: renderer із PNG, лобі, Join, а лише потім Game + loop.start().
+## 3. Потокові match logs і backpressure
+
+Кожна кімната має окремий файл `LOG_DIR/<room>-<timestamp>-<suffix>.ndjson`. `Room.emit('event', {...})` подає об'єкт у `PassThrough({objectMode:true})` → `JsonLinesTransform` → `createWriteStream(file)` через **`stream/promises.pipeline`**. Кожен запис має один JSON-об'єкт на рядок. Коли `write()` дає `false`, вмикається `room.logBackpressured`: нові chat-події тимчасово не записуються до переповненого writer (сервер відповідає клієнту повідомленням «Log stream busy; retry chat»). Подія `drain` знімає блокування.
+
+Файл віддається потоково `pipeline(createReadStream(file), res)`. Ітератор `replayEvents(file)` через `readline.createInterface(...)` парсить рядки окремо — весь файл не опиняється в оперативній пам'яті. Також існує ліміт `bufferedAmount` для WebSocket-клієнтів зі слабким інтернетом.
+
+### RSS-графік: реальний тест 200 МіБ через уповільнений канал
+
+![Lab 04 RSS from a 200 MiB streamed log](docs/rss-lab-04.svg)
+
+**Методика:** Node 22.16.0, локальний Linux runner. `node server/scripts/rss-benchmark.mjs --mb=200 --pause=50 --out=docs` генерує 200 МіБ синтетичного NDJSON, віддає через **той самий `streamReplay`** і приймає через HTTP-клієнт, який призупиняє читання **на 50 мс після кожного 1 МіБ**. RSS знімається кожні 200 мс. Це **сповільнений локальний HTTP-клієнт**, а не Chrome Network 2G; на Mac/Chrome заміри варто повторити, якщо викладач вимагає саме DevTools throttling.
+
+| Параметр                               |   Фактично виміряно |
+| -------------------------------------- | ------------------: |
+| Розмір переданого логу                 |          200,00 МіБ |
+| Час передачі                           |             10,24 с |
+| RSS на старті                          |           52,60 МіБ |
+| Максимальний RSS                       |           75,80 МіБ |
+| RSS після стартового прогріву (~1.0 с) | приблизно 74–75 МіБ |
+| Зразків RSS                            |                  53 |
+
+**Висновок:** початкове зростання RSS ~23 МіБ спричинене прогрівом рантайму, буферами та мережевим стеком; після цього крива майже пласка, хоч передано **200 МіБ**. Це свідчить, що весь лог не накопичувався в пам'яті процесу. Порівняння з `readFile` для 200 МіБ дало б зовсім іншу поведінку. CSV-вибірка: [`docs/rss-lab-04.csv`](docs/rss-lab-04.csv). Дослід відтворюється командою `npm run bench:rss`.
+
+## 4. Event loop (libuv) та навмисна 300 мс зупинка
+
+**Фази Node.js:** `timers` → `pending callbacks` → `poll` (I/O) → `check` (`setImmediate`) → `close callbacks`. `process.nextTick` має власну чергу з вищим пріоритетом, ніж promise microtasks, а обидві виконуються до повернення до відповідних фаз. `setTimeout(0)` проти `setImmediate` з верхнього рівня модуля може мати різний порядок через момент запуску таймерів/poll, а **всередині I/O-callback** `setImmediate` виконується в check після poll. Node виконує JS callbacks на одному event loop thread; I/O може делегуватися ОС/libuv worker pool.
+
+**Демонстрація:** `npm run bench:slow` запускає тестовий HTTP-сервер із дозволеним `/api/slow` (цикл зайнятий 300 мс), паралельно запитує `/health` і показує час відповіді. В нашому запуску: slow **324.9 мс**, health **328.4 мс**: швидкий endpoint теж мусив чекати, хоча не мав важкої роботи. `/api/slow` у звичайному сервері **вимкнено**; щоб ввімкнути, постав `ENABLE_SLOW_DEMO=1` у `.env`. Жоден Promise/HTTP timer не може перервати CPU-bound `while` на цьому самому JS-потоці.
+
+`EventEmitter.emit('error', new Error('boom'))` **без обробника** кидає помилку, що може завершити Node-процес. Мінімальне відтворення:
+
+```bash
+node -e "const {EventEmitter}=require('node:events'); new EventEmitter().emit('error',new Error('boom'))"
+# Error: boom; process exits non-zero
+node -e "const {EventEmitter}=require('node:events'); const e=new EventEmitter(); e.on('error',console.error); e.emit('error',new Error('caught'))"
+# prints error; process continues
 ```
 
-`Promise.all` відхиляється, якщо будь-який критичний ресурс не завантажився; цей exception перехоплює `boot()`, скасовує інші запити й показує Retry. Прогрес показує кількість **успішно завершених файлів**, а не вигаданий відсоток; при одночасній роботі порядок завершення не зобов'язаний збігатися з manifest.
+Тому `Room`, `RoomManager`, `http.Server`, `WebSocketServer` і кожен WebSocket мають слухачі `error`; помилки в `pipeline` перехоплюються Promise `.catch`. Необроблене відхилення Promise може завершити сучасний Node-процес залежно від режиму unhandled rejections — `try/catch` або `.catch` є обов'язковими для задач, які можуть завершитися невдало.
 
-### Вимірювання: sequential `await` vs concurrent `Promise.all`
+**Buffer:** `Buffer.byteLength('привіт', 'utf8') === 12`, тоді як `'привіт'.length === 6`: WebSocket payload cap вимірюється **в байтах UTF-8**, а не кількості JS-символів.
 
-Функція `measureLoading` проходить ті самі 8 файлів спочатку послідовно (`for ... await`), потім паралельно (`loadAll`). **Три фактичні заміри у headless Chromium**, де всі файлові `fetch` підмінено однаковим локальним тестовим адаптером з **20 мс штучної затримки на запит**; декодування PNG/WAV лишилося браузерним. Це **не** заявлені вимірювання Vite на Mac — повторіть їх на своєму комп'ютері.
+## 5. Що показати за 5 хвилин
 
-| Спроба | Sequential await | Concurrent Promise.all | Прискорення |
-| ------ | ---------------: | ---------------------: | ----------: |
-| 1      |         177.6 мс |                45.4 мс |        3.9× |
-| 2      |         176.8 мс |                30.2 мс |        5.9× |
-| 3      |         178.5 мс |                33.4 мс |        5.3× |
+1. `npm run dev`, відкрити два вікна Vite. Показати, що `GET /health` і `GET /api/rooms` відповідають.
+2. В обох вибрати `Orion Belt`, ввести імена `Anna` та `Bohdan`, натиснути **Join**. Побачити обох у **LIVE ROOM / WS CHAT**.
+3. Надіслати `Привіт!` з першого вікна; в другому він з'являється одразу. Показати **політ/постріл**, підкреслити, що між вікнами НЕ транслюються координати.
+4. Закрити одне вікно або Lobby → **roster** оновлюється; показати файли NDJSON, `GET /api/replays/:id`, графік RSS.
+5. Пояснити `EventEmitter`/`error`, `pipeline`/backpressure й `ping/pong`, відповісти на 2–3 запитання Reflection (див. `docs/reflection-lab-04.md`).
 
-**Чому:** послідовний `await` чекає файл N до старту N+1, а `Promise.all` ставить усі `fetch` у роботу одразу. Швидкість залежить від кешу, браузера, мережі та декодера; паралельність **не створює додатковий JS-потік**, а overlapping I/O і роботу асинхронних API.
+**Контроль:** `npm run check` + ручна перевірка 2 вікон. Попередні експерименти ЛР №1–3 і відповіді залишилися в `docs/`; старий README ЛР №3 збережено як `docs/lab-03-readme.md` під час міграції.
 
-Власний вимір у Chrome DevTools Console (після завантаження лобі):
-
-```js
-window.__spaceArenaDebug.compareAssetLoading().then(console.table);
-```
-
-## 4. П'ять власних головоломок: task, microtask, rAF
-
-Приклади запускати **окремо** у браузерній Console. В усіх є `await`, `setTimeout` **усередині `.then`** та `requestAnimationFrame`; вихід збудований так, щоб між timer і rAF не було неозначеної гонки (rAF реєструється всередині timer). `await` відновлює async-функцію як microtask; `.then` теж microtask; `setTimeout` — task; rAF — перед наступним paint.
-
-**Головоломка 1 — один `await`:**
-
-```js
-async function a() {
-  console.log('A1');
-  await Promise.resolve();
-  console.log('A3');
-  Promise.resolve().then(() => {
-    console.log('A4');
-    setTimeout(() => {
-      console.log('A5');
-      requestAnimationFrame(() => console.log('A6'));
-    }, 0);
-  });
-}
-a();
-console.log('A2');
-// Вивід: A1 A2 A3 A4 A5 A6
-```
-
-Пояснення: синхронні A1/A2 перед continuation `await` A3, потім `.then` A4, таймер A5, rAF A6.
-
-**Головоломка 2 — `.then` ставиться у чергу раніше, ніж `await`:**
-
-```js
-Promise.resolve().then(() => {
-  console.log('B3');
-  setTimeout(() => {
-    console.log('B5');
-    requestAnimationFrame(() => console.log('B6'));
-  }, 0);
-});
-async function b() {
-  console.log('B1');
-  await 0;
-  console.log('B4');
-}
-b();
-console.log('B2');
-// Вивід: B1 B2 B3 B4 B5 B6
-```
-
-Пояснення: B3 уже стоїть у черзі microtasks перед B4, але сам виклик async-функції виконує B1 синхронно.
-
-**Головоломка 3 — два `await` віддають чергу іншим microtasks:**
-
-```js
-async function c() {
-  console.log('C1');
-  await 0;
-  console.log('C3');
-  await 0;
-  console.log('C5');
-}
-c();
-Promise.resolve().then(() => {
-  console.log('C4');
-  setTimeout(() => {
-    console.log('C6');
-    requestAnimationFrame(() => console.log('C7'));
-  }, 0);
-});
-console.log('C2');
-// Вивід: C1 C2 C3 C4 C5 C6 C7
-```
-
-Пояснення: після C3 другий `await` ставить C5 у хвіст microtask queue, поступаючись уже запланованому C4.
-
-**Головоломка 4 — `reject` переходить у `catch` після microtask:**
-
-```js
-async function d() {
-  console.log('D1');
-  try {
-    await Promise.reject(new Error('fail'));
-  } catch {
-    console.log('D3');
-    await 0;
-  }
-  console.log('D5');
-}
-d();
-Promise.resolve().then(() => {
-  console.log('D4');
-  setTimeout(() => {
-    console.log('D6');
-    requestAnimationFrame(() => console.log('D7'));
-  }, 0);
-});
-console.log('D2');
-// Вивід: D1 D2 D3 D4 D5 D6 D7
-```
-
-Пояснення: rejection відновлює `catch` як microtask D3, а `await` у `catch` дає виконатися D4 раніше за D5.
-
-**Головоломка 5 — `await` усередині таймера:**
-
-```js
-console.log('E1');
-Promise.resolve().then(() => {
-  console.log('E3');
-  setTimeout(async () => {
-    console.log('E5');
-    await Promise.resolve();
-    console.log('E6');
-    requestAnimationFrame(() => console.log('E7'));
-  }, 0);
-});
-(async () => {
-  await 0;
-  console.log('E4');
-})();
-console.log('E2');
-// Вивід: E1 E2 E3 E4 E5 E6 E7
-```
-
-Пояснення: E3/E4 — microtasks поточного завдання; E5 — новий timer task; E6 — microtask після `await` таймера; E7 — rAF.
-
-**Три стани Promise:** `pending`, `fulfilled`, `rejected`. `.then` створює новий Promise, `throw` відхиляє downstream Promise, `.catch` або `try/catch` його обробляє. Колбек, Promise `.then` і `await` — різні інтерфейси одного асинхронного процесу; `await` не блокує браузерний event loop.
-
-Комбінатори: `Promise.all` — усі успішні або перша помилка; `Promise.allSettled` — результати кожного, включно з rejected; `Promise.race` — результат першого завершеного (лобі використовує у async iterator); `Promise.any` — перший **успішний** або `AggregateError`, якщо всі відхилені. Мініприклади див. `docs/async-combinators-lab-03.md`.
-
-## 5. Галерея збоїв — не падаємо, кнопка Retry
-
-![Four real browser failure screenshots](docs/failure-gallery-lab-03.png)
-
-У Vite відкрийте посилання по одному: `/?failure=404`, `/?failure=timeout`, `/?failure=abort`, `/?failure=json`. В кожному випадку є помилка на Canvas/overlay та **Retry loading**, яка прибирає demo-параметр і без перезавантаження вкладки виконує нормальний `boot()` → лобі. Не треба видаляти реальні файли з проєкту.
-
-| Сценарій           | Механізм                                            | Очікувана реакція                            |
-| ------------------ | --------------------------------------------------- | -------------------------------------------- |
-| `?failure=404`     | Підміна URL `ships.png` на неіснуючий               | `HttpError 404`, **немає ретраю 4xx**, Retry |
-| `?failure=timeout` | Невідповідний `fetch` + timeout 350 мс/спроба       | `TimeoutError` після 3 спроб, Retry          |
-| `?failure=abort`   | `AbortController.abort()` на 280 мс під час запитів | `AbortError`, без ретраю, Retry              |
-| `?failure=json`    | Неповний `broken.json`                              | `SyntaxError` на `.json()`, Retry            |
-
-Власний smoke-test у headless Chromium виконав кожен збій та натискання Retry: **4/4 повернулися до лобі з 3 кімнатами, без uncaught JavaScript errors**. Browser harness подав ті самі ESM/HTML/CSS і бінарні ресурси через локальний test adapter, **не Vite HTTP navigation**. Повний сценарій захисту — `docs/failure-gallery-lab-03.md`.
-
-## 6. Lobby, EventTarget, Web Audio
-
-`Lobby extends EventTarget` відповідає лише за модель (`rooms`, `join`, `refresh`, `start`, `stop`) та `CustomEvent('rooms' | 'roomerror' | 'join')`. UI в `src/lobby/view.js`; кнопки та список кімнат не в класі Lobby. Коли лобі видиме, `setInterval` викликає асинхронний `refresh()` раз на 5 с. На кожен запит використовується `AbortSignal.any([controller.signal, AbortSignal.timeout(2400)])`; `stop()` перериває незавершений fetch, прибирає timer і запобігає оновленню UI старою відповіддю через `generation`. `async *updates` повертає зміни, а `main.js` читає їх через **`for await (... of ...)`**.
-
-Після натискання Join `audio.unlock()` створює/відновлює справжній `AudioContext`, а до цього `loadAudio` лише декодує у `OfflineAudioContext` (без autoplay). Підписки на `fired`, `hit`, `exploded` знаходяться в `src/audio/audio.js`, а `src/sim/game.js` лише надсилає події в передану шину, не імпортуючи звук/HUD.
-
-## 7. Захист і GitHub
-
-**П'ятихвилинний показ:** loading bar → lobby з трьома кімнатами → Join → постріл зі звуком і sprites → коротко Promise.all/retry/AbortController/EventTarget → 2–3 відповіді з `docs/reflection-lab-03.md` (сценарій `docs/defense-lab-03.md`).
-
-Переконайтесь, що локальна гілка вже підключена до існуючого `origin` і не містить невідправлених змін інших людей:
+## 6. GitHub / здача
 
 ```bash
 git status
-git add .
-git commit -m "Lab 03: async assets, loading screen, lobby and Web Audio"
-git tag lab-03
+git add -A
+git commit -m "Lab 04: Node HTTP, WebSocket rooms and streaming chat logs"
+git tag lab-04
 git push origin main
-git push origin lab-03
+git push origin lab-04
 ```
 
-Здається **той самий репозиторій**: `https://github.com/top4icsem/space-arena`, з окремими тегами `lab-01`, `lab-02`, `lab-03`. Для інструкції копіювання файлів з ZIP поверх наявної папки див. `ЯК_ДОДАТИ_ЛР3.md`. **Не копіюйте чужу `.git` і не створюйте новий `git init`.**
+**Той самий репозиторій:** https://github.com/top4icsem/space-arena — `lab-01`, `lab-02`, `lab-03`, `lab-04`. Файл `ЯК_ДОДАТИ_ЛР4.md` пояснює розпакування оновлення та міграцію в `client/` + `server/`.
 
-**Статус перевірки в середовищі створення:** 47/47 Node tests; браузерний smoke-test ESM/DOM/Canvas/PNG/WAV/lobby/fire; 4/4 recoverable failures. npm registry тут недоступний, тому `npm run lint`, `npm run format:check` і Vite `npm run build` потрібно виконати на своєму Mac перед пушем; цей README не стверджує, що вони вже пройшли.
+**Основа завдання:** [Lab 04 — Node.js, Streams, WebSocket Server](https://github.com/rmalkevy/Programming-Practice-Projects/blob/main/courses/javascript/lab-04-node-streams-websockets.md) та [Lab 04 Notes](https://github.com/rmalkevy/Programming-Practice-Projects/blob/main/courses/javascript/lab-04-node-streams-websockets.notes.md).

@@ -1,0 +1,6 @@
+{"t":1795613927425,"type":"join","room":"zenith","player":"54bea041-dd0c-401f-8650-be9b590d418e","name":"Pilot1"}
+{"t":1795613929241,"type":"join","room":"zenith","player":"8776d119-f3a4-410c-bd99-6803e1e582a9","name":"Pilot2"}
+{"t":1795613933680,"type":"chat","room":"zenith","player":"54bea041-dd0c-401f-8650-be9b590d418e","name":"Pilot1","text":"12412412412"}
+{"t":1795613937713,"type":"chat","room":"zenith","player":"8776d119-f3a4-410c-bd99-6803e1e582a9","name":"Pilot2","text":"12415"}
+{"t":1795613938966,"type":"leave","room":"zenith","player":"8776d119-f3a4-410c-bd99-6803e1e582a9","name":"Pilot2"}
+{"t":1795613939615,"type":"leave","room":"zenith","player":"54bea041-dd0c-401f-8650-be9b590d418e","name":"Pilot1"}

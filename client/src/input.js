@@ -26,6 +26,8 @@ export function createInput(target = window) {
   }
 
   function onKeyDown(event) {
+    // Chat typing must never steer the ship or trigger weapon hotkeys.
+    if (['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)) return;
     if (
       CONTROL_KEYS.has(event.code) &&
       !['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target?.tagName)

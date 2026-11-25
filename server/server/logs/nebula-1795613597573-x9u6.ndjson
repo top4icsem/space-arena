@@ -1,0 +1,4 @@
+{"t":1795613764243,"type":"join","room":"nebula","player":"a8e0b6bd-94a8-4c81-9daa-71312359733c","name":"Pilot1"}
+{"t":1795613766044,"type":"join","room":"nebula","player":"f09f2ffa-1089-4c57-9b43-192446531d37","name":"Pilot2"}
+{"t":1795613767583,"type":"leave","room":"nebula","player":"f09f2ffa-1089-4c57-9b43-192446531d37","name":"Pilot2"}
+{"t":1795613814864,"type":"leave","room":"nebula","player":"a8e0b6bd-94a8-4c81-9daa-71312359733c","name":"Pilot1"}

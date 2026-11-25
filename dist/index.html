@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#090d18" />
+    <meta
+      name="description"
+      content="Space Arena — Canvas 2D space combat with composition, World and entities."
+    />
+    <title>Space Arena — Async Command Deck</title>
+    <script type="module" crossorigin src="/assets/index-B5ZjDp1H.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DxMVVOXw.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path
+                d="M22 6 9 36l13-8 13 8L22 6Z"
+                stroke="currentColor"
+                stroke-width="2.4"
+                stroke-linejoin="round"
+              />
+              <path
+                d="m22 15 0 13"
+                stroke="currentColor"
+                stroke-width="2.2"
+                stroke-linecap="round"
+              />
+              <circle cx="22" cy="22" r="19.5" stroke="currentColor" stroke-opacity=".24" />
+            </svg>
+          </div>
+          <span class="brand-name">SPACE<span>ARENA</span></span>
+          <span class="brand-divider"></span>
+          <span class="brand-context">ASYNC DECK</span>
+        </div>
+        <div class="topbar-right">
+          <span class="topbar-version"
+            >BUILD 0.3.0 <span class="dot-sep">/</span> LAB 03 OF 08</span
+          >
+          <div class="online-pill">
+            <span class="live-dot"></span><span id="system-status">SYSTEM ONLINE</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="main-section" aria-labelledby="page-title">
+          <div class="section-heading">
+            <div>
+              <div class="eyebrow">
+                <span class="eyebrow-line"></span> ASYNC SPACE COMBAT
+                <span class="eyebrow-number">/ 001</span>
+              </div>
+              <h1 id="page-title">Defend the <span>void.</span></h1>
+              <p>Load your ship, join a sector, and fight across the stars.</p>
+            </div>
+            <div class="flight-tag"><span class="flight-tag-dot"></span> COMBAT SYSTEM ACTIVE</div>
+          </div>
+
+          <section class="arena-card" aria-label="Interactive space flight arena">
+            <div class="arena-top-hud" aria-hidden="true">
+              <div class="arena-hud-group">
+                <span class="hud-corner-icon">⌖</span>
+                <div>
+                  <span class="hud-kicker">LOCATION</span
+                  ><strong><span id="sector-label">AWAITING JOIN</span></strong>
+                </div>
+              </div>
+              <div class="arena-hud-right">
+                <span class="hud-kicker">BOUNDARY MODE</span
+                ><span class="wrap-badge">↗ INFINITE WRAP</span>
+              </div>
+            </div>
+            <div class="arena-stage">
+              <canvas
+                id="arena"
+                width="1100"
+                height="680"
+                aria-label="Space arena with a controllable ship"
+                tabindex="0"
+              ></canvas>
+              <div class="reticle-corner reticle-tl" aria-hidden="true"></div>
+              <div class="reticle-corner reticle-tr" aria-hidden="true"></div>
+              <div class="reticle-corner reticle-bl" aria-hidden="true"></div>
+              <div class="reticle-corner reticle-br" aria-hidden="true"></div>
+              <div class="arena-signal" aria-hidden="true">
+                <span class="signal-bars">▂▄▆</span> NO SIGNAL DELAY
+              </div>
+              <div class="arena-lower-left" aria-hidden="true">
+                <span class="mini-cross">✧</span> PLAYER 01
+                <span class="arena-subtle">/ PHANTOM</span>
+              </div>
+              <div class="arena-lower-right" id="canvas-coordinates" aria-live="off">
+                X 0550 <span>/</span> Y 0340
+              </div>
+              <div class="lobby-overlay" id="lobby-overlay" hidden>
+                <div class="lobby-panel">
+                  <div class="lobby-eyebrow">◈ NETWORK LOBBY / LOCAL SIMULATION</div>
+                  <h2>Select your <em>sector.</em></h2>
+                  <p class="lobby-intro">
+                    Your callsign and the arena configuration. No backend multiplayer yet — that
+                    arrives in Lab 04.
+                  </p>
+                  <form id="lobby-form">
+                    <label class="pilot-label" for="pilot-name">PILOT CALLSIGN</label>
+                    <input
+                      type="text"
+                      id="pilot-name"
+                      maxlength="20"
+                      value="Pilot"
+                      autocomplete="nickname"
+                      required
+                    />
+                    <div class="lobby-row-title">
+                      <span>AVAILABLE ROOMS</span
+                      ><button type="button" id="refresh-rooms">↻ REFRESH</button>
+                    </div>
+                    <div id="room-grid" class="room-grid" aria-label="Available rooms">
+                      <p class="lobby-spinner">Connecting to /api/rooms...</p>
+                    </div>
+                    <div id="lobby-message" class="lobby-message" role="status">
+                      Checking room availability...
+                    </div>
+                    <button type="submit" id="join-game" class="join-button" disabled>
+                      JOIN MISSION <span>→</span>
+                    </button>
+                  </form>
+                  <div class="lobby-footer">
+                    <button id="sound-toggle" type="button">♪ SOUND: ON</button
+                    ><span>GET /api/rooms · POLL / 5s</span>
+                  </div>
+                  <button id="leave-arena" type="button" hidden>Close</button>
+                </div>
+              </div>
+              <div class="asset-failure" id="asset-failure" hidden role="alert">
+                <h2>Resource load failed</h2>
+                <p id="asset-error-message">Cannot fetch assets</p>
+                <button type="button" id="retry-assets">↻ Retry loading</button>
+              </div>
+              <div class="pause-overlay" id="pause-overlay" hidden>
+                <div class="pause-icon">Ⅱ</div>
+                <h2>Simulation paused</h2>
+                <p>Press P or Resume to continue</p>
+              </div>
+            </div>
+          </section>
+
+          <div class="below-arena">
+            <div class="arena-actions">
+              <button
+                type="button"
+                class="action-btn action-primary"
+                id="pause-button"
+                aria-pressed="false"
+              >
+                <span id="pause-icon">Ⅱ</span><span id="pause-label">Pause simulation</span>
+              </button>
+              <button type="button" class="action-btn action-secondary" id="reset-button">
+                <span>↻</span> Reset arena
+              </button>
+              <button type="button" class="action-btn action-secondary" id="back-to-lobby">
+                <span>⌂</span> Lobby
+              </button>
+              <button
+                type="button"
+                class="action-btn action-secondary"
+                id="mute-button"
+                aria-pressed="false"
+              >
+                <span>♪</span> Sound on
+              </button>
+            </div>
+            <div class="arena-hint">
+              <span class="hint-glow"></span> WASD to fly <span class="hint-divider">·</span> SPACE
+              to fire <span class="hint-divider">·</span> SHIFT+SPACE to home
+              <span class="hint-divider">·</span> P to pause <span class="hint-divider">·</span> R
+              to reset
+            </div>
+          </div>
+          <div id="experiment-alert" class="experiment-alert" hidden></div>
+        </section>
+
+        <aside class="sidebar" aria-label="Ship telemetry and controls">
+          <div class="sidebar-head">
+            <span>COMBAT TELEMETRY</span><span class="sidebar-index">03 / LIVE</span>
+          </div>
+          <section class="metrics-grid" aria-label="Live performance metrics">
+            <div class="metric-card metric-card-feature">
+              <span class="metric-label">RENDER RATE <span class="metric-icon">◈</span></span>
+              <div class="metric-number">
+                <strong id="frames-per-second">--</strong><span>FPS</span>
+              </div>
+              <span class="metric-foot">Display refresh <span class="small-dot">·</span> rAF</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">SIMULATION <span class="metric-icon">◎</span></span>
+              <div class="metric-number">
+                <strong id="steps-per-second">--</strong><span>STEPS/S</span>
+              </div>
+              <span class="metric-foot">Fixed at 60 Hz</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">FRAME TIME <span class="metric-icon">⌁</span></span>
+              <div class="metric-number"><strong id="frame-time">--</strong><span>MS</span></div>
+              <span class="metric-foot">Frame-to-frame interval</span>
+            </div>
+          </section>
+
+          <section class="combat-stats" aria-label="Combat score, health and entities">
+            <div class="combat-stat score-stat">
+              <span>SCORE</span><strong id="score">0</strong>
+            </div>
+            <div class="combat-stat hp-stat">
+              <span>HULL INTEGRITY</span><strong id="health">♥♥♥</strong>
+            </div>
+            <div class="combat-stat"><span>ASTEROIDS</span><strong id="asteroids">5</strong></div>
+            <div class="combat-stat"><span>PROJECTILES</span><strong id="bullets">0</strong></div>
+            <div class="respawn-line" id="respawn-status">READY</div>
+          </section>
+          <section class="instrument-card" aria-label="Current flight data">
+            <div class="instrument-title">
+              <span>FLIGHT INSTRUMENTS</span
+              ><span class="instrument-live"><span></span> ACTIVE</span>
+            </div>
+            <div class="instrument-row">
+              <span class="instrument-name">VELOCITY</span>
+              <div class="instrument-value"><strong id="speed">0</strong><span>PX/S</span></div>
+            </div>
+            <div class="speed-track"><span id="speed-bar"></span></div>
+            <div class="instrument-row instrument-row-divider">
+              <span class="instrument-name">HEADING</span>
+              <div class="instrument-value">
+                <strong id="heading">0</strong><span>DEG</span
+                ><span class="heading-arrow" id="heading-arrow">↑</span>
+              </div>
+            </div>
+            <div class="instrument-row instrument-row-divider">
+              <span class="instrument-name">WORLD POSITION</span>
+              <div class="instrument-value coords"><strong id="position">550 : 340</strong></div>
+            </div>
+            <div class="instrument-row instrument-row-divider">
+              <span class="instrument-name">THRUST</span
+              ><span class="thruster-indicator" id="thrust-indicator">IDLE</span>
+            </div>
+          </section>
+
+          <section class="controls-card" aria-label="Keyboard controls">
+            <div class="controls-head"><span>FLIGHT CONTROLS</span><span>KEYBOARD</span></div>
+            <div class="controls-body">
+              <div class="keys-grid" aria-hidden="true">
+                <div class="key key-w" id="key-w">W<span>↑</span></div>
+                <div class="key key-a" id="key-a">A<span>↶</span></div>
+                <div class="key key-s" id="key-s">S<span>↓</span></div>
+                <div class="key key-d" id="key-d">D<span>↷</span></div>
+              </div>
+              <div class="controls-legend">
+                <div><strong>W</strong><span>THRUST</span></div>
+                <div><strong>A / D</strong><span>ROTATE</span></div>
+                <div><strong>S</strong><span>BRAKE</span></div>
+              </div>
+            </div>
+            <div class="controls-footer">
+              <span class="key-space">SPACE</span><span>Fire · SHIFT+SPACE homing</span
+              ><span class="lock">⌁</span>
+            </div>
+          </section>
+          <div class="side-note">
+            <span class="note-star">✳</span
+            ><span
+              ><strong>DEV NOTE</strong>
+              <span
+                >EventTarget signals, async assets, Web Audio and zero-blocking lobby polling.</span
+              ></span
+            >
+          </div>
+        </aside>
+      </main>
+      <footer class="page-footer">
+        <span>SPACE ARENA <span class="footer-sep">//</span> JAVASCRIPT GAME SYSTEMS</span
+        ><span>VANILLA JS <span>·</span> CANVAS 2D <span>·</span> FIXED TIMESTEP</span>
+      </footer>
+    </div>
+  </body>
+</html>

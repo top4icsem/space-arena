@@ -8,7 +8,7 @@
       name="description"
       content="Space Arena — Canvas 2D space combat with composition, World and entities."
     />
-    <title>Space Arena — Async Command Deck</title>
+    <title>Space Arena — Multiplayer Command Deck</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
@@ -34,11 +34,11 @@
           </div>
           <span class="brand-name">SPACE<span>ARENA</span></span>
           <span class="brand-divider"></span>
-          <span class="brand-context">ASYNC DECK</span>
+          <span class="brand-context">NETWORK DECK</span>
         </div>
         <div class="topbar-right">
           <span class="topbar-version"
-            >BUILD 0.3.0 <span class="dot-sep">/</span> LAB 03 OF 08</span
+            >BUILD 0.4.0 <span class="dot-sep">/</span> LAB 04 OF 08</span
           >
           <div class="online-pill">
             <span class="live-dot"></span><span id="system-status">SYSTEM ONLINE</span>
@@ -51,7 +51,7 @@
           <div class="section-heading">
             <div>
               <div class="eyebrow">
-                <span class="eyebrow-line"></span> ASYNC SPACE COMBAT
+                <span class="eyebrow-line"></span> MULTIPLAYER LOBBY
                 <span class="eyebrow-number">/ 001</span>
               </div>
               <h1 id="page-title">Defend the <span>void.</span></h1>
@@ -98,11 +98,11 @@
               </div>
               <div class="lobby-overlay" id="lobby-overlay" hidden>
                 <div class="lobby-panel">
-                  <div class="lobby-eyebrow">◈ NETWORK LOBBY / LOCAL SIMULATION</div>
+                  <div class="lobby-eyebrow">◈ NETWORK LOBBY / LIVE WEBSOCKET</div>
                   <h2>Select your <em>sector.</em></h2>
                   <p class="lobby-intro">
-                    Your callsign and the arena configuration. No backend multiplayer yet — that
-                    arrives in Lab 04.
+                    Your callsign and the arena configuration. Connected to a real Node.js room
+                    server. Ship physics remains local until Lab 05.
                   </p>
                   <form id="lobby-form">
                     <label class="pilot-label" for="pilot-name">PILOT CALLSIGN</label>
@@ -185,7 +185,7 @@
 
         <aside class="sidebar" aria-label="Ship telemetry and controls">
           <div class="sidebar-head">
-            <span>COMBAT TELEMETRY</span><span class="sidebar-index">03 / LIVE</span>
+            <span>COMBAT TELEMETRY</span><span class="sidebar-index">04 / LIVE</span>
           </div>
           <section class="metrics-grid" aria-label="Live performance metrics">
             <div class="metric-card metric-card-feature">
@@ -247,6 +247,26 @@
             </div>
           </section>
 
+          <section class="network-card" aria-label="Live room and chat">
+            <div class="network-head">
+              <span>LIVE ROOM / WS CHAT</span><span id="network-status">OFFLINE</span>
+            </div>
+            <div class="network-roster" id="network-roster" aria-label="Pilots in this room"></div>
+            <div class="chat-messages" id="chat-messages" aria-live="polite">
+              <div class="chat-help">Join a room to chat across two browser windows.</div>
+            </div>
+            <form id="chat-form" class="chat-form">
+              <input
+                id="chat-input"
+                type="text"
+                autocomplete="off"
+                minlength="1"
+                maxlength="300"
+                placeholder="Message your team…"
+                aria-label="Chat message"
+              /><button type="submit">SEND</button>
+            </form>
+          </section>
           <section class="controls-card" aria-label="Keyboard controls">
             <div class="controls-head"><span>FLIGHT CONTROLS</span><span>KEYBOARD</span></div>
             <div class="controls-body">
@@ -272,7 +292,7 @@
             ><span
               ><strong>DEV NOTE</strong>
               <span
-                >EventTarget signals, async assets, Web Audio and zero-blocking lobby polling.</span
+                >Node.js EventEmitter rooms, WebSocket chat and streamed NDJSON match logs.</span
               ></span
             >
           </div>

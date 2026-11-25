@@ -1,8 +1,10 @@
 node_modules/
-dist/
+client/dist/
+server/logs/
 coverage/
 *.log
 .DS_Store
 .env
 .env.*
 !.env.example
+.lab04_patch/
