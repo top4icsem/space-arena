@@ -56,19 +56,21 @@ function simulate(dt) {
     };
     console.info('[SPACE ARENA] 5-second controlled thrust benchmark', result);
     $('#experiment-alert').hidden = false;
-    $('#experiment-alert').textContent = `5.00s benchmark finished: x=${result.x}, y=${result.y}, speed=${result.velocity}. See console for full result.`;
+    $('#experiment-alert').textContent =
+      `5.00s benchmark finished: x=${result.x}, y=${result.y}, speed=${result.velocity}. See console for full result.`;
   }
 }
 
 function updateFlightTelemetry() {
   const speed = Math.hypot(current.vx, current.vy);
-  const headingDeg = ((current.angle * 180 / Math.PI) % 360 + 360) % 360;
+  const headingDeg = ((((current.angle * 180) / Math.PI) % 360) + 360) % 360;
   $('#speed').textContent = Math.round(speed);
-  $('#speed-bar').style.width = `${Math.min(100, speed / SHIP_PHYSICS.maximumSpeed * 100)}%`;
+  $('#speed-bar').style.width = `${Math.min(100, (speed / SHIP_PHYSICS.maximumSpeed) * 100)}%`;
   $('#heading').textContent = Math.round(headingDeg);
   $('#heading-arrow').style.transform = `rotate(${current.angle}rad)`;
   $('#position').textContent = `${Math.round(current.x)} : ${Math.round(current.y)}`;
-  $('#canvas-coordinates').innerHTML = `X ${String(Math.round(current.x)).padStart(4, '0')} <span>/</span> Y ${String(Math.round(current.y)).padStart(4, '0')}`;
+  $('#canvas-coordinates').innerHTML =
+    `X ${String(Math.round(current.x)).padStart(4, '0')} <span>/</span> Y ${String(Math.round(current.y)).padStart(4, '0')}`;
   $('#thrust-indicator').textContent = current.thrusting ? 'ENGAGED' : 'IDLE';
   $('#thrust-indicator').classList.toggle('engaged', current.thrusting);
   for (const key of ['w', 'a', 's', 'd']) {
@@ -114,7 +116,11 @@ function setPaused(next) {
 $('#pause-button').addEventListener('click', () => setPaused(!paused));
 $('#reset-button').addEventListener('click', () => resetShip());
 window.addEventListener('keydown', (event) => {
-  if (event.code === 'KeyP' && !event.repeat && !['INPUT', 'TEXTAREA'].includes(event.target?.tagName)) {
+  if (
+    event.code === 'KeyP' &&
+    !event.repeat &&
+    !['INPUT', 'TEXTAREA'].includes(event.target?.tagName)
+  ) {
     setPaused(!paused);
   }
   if (event.code === 'KeyR' && paused) resetShip();
@@ -131,7 +137,8 @@ if (experiment) {
 }
 if (autoThrust && !experiment) {
   $('#experiment-alert').hidden = false;
-  $('#experiment-alert').textContent = 'Automated 5 s thrust benchmark: the ship will fly straight ahead.';
+  $('#experiment-alert').textContent =
+    'Automated 5 s thrust benchmark: the ship will fly straight ahead.';
 }
 
 // Intentionally read-only observation point for DevTools and scripted experiments.

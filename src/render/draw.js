@@ -37,17 +37,25 @@ function buildBackdrop() {
   ctx.strokeStyle = 'rgba(114, 154, 211, .055)';
   ctx.lineWidth = 1;
   for (let x = 0; x <= width; x += 44) {
-    ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, height); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, height);
+    ctx.stroke();
   }
   for (let y = 0; y <= height; y += 44) {
-    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(width, y + 0.5); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(width, y + 0.5);
+    ctx.stroke();
   }
 
   ctx.strokeStyle = 'rgba(116, 182, 226, .09)';
   ctx.setLineDash([5, 12]);
   ctx.lineWidth = 1;
   for (const radius of [120, 245, 370]) {
-    ctx.beginPath(); ctx.arc(width / 2, height / 2, radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(width / 2, height / 2, radius, 0, Math.PI * 2);
+    ctx.stroke();
   }
   ctx.setLineDash([]);
 
@@ -66,11 +74,17 @@ function buildBackdrop() {
     const size = 0.45 + random() * 1.5;
     const alpha = 0.13 + random() * 0.6;
     ctx.fillStyle = `rgba(178, 213, 255, ${alpha})`;
-    ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
     if (i % 23 === 0) {
-      ctx.strokeStyle = `rgba(174, 207, 246, ${alpha * .7})`;
-      ctx.beginPath(); ctx.moveTo(x - 5, y); ctx.lineTo(x + 5, y);
-      ctx.moveTo(x, y - 5); ctx.lineTo(x, y + 5); ctx.stroke();
+      ctx.strokeStyle = `rgba(174, 207, 246, ${alpha * 0.7})`;
+      ctx.beginPath();
+      ctx.moveTo(x - 5, y);
+      ctx.lineTo(x + 5, y);
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x, y + 5);
+      ctx.stroke();
     }
   }
 
@@ -108,10 +122,16 @@ function drawOneShip(ctx, x, y, angle, thrusting, timestamp) {
 
   ctx.strokeStyle = 'rgba(85, 211, 250, .18)';
   ctx.lineWidth = 1.3;
-  ctx.beginPath(); ctx.arc(0, 0, 39, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 39, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.strokeStyle = 'rgba(85, 211, 250, .32)';
-  ctx.beginPath(); ctx.arc(0, 0, 39, Math.PI * 1.72, Math.PI * 1.93); ctx.stroke();
-  ctx.beginPath(); ctx.arc(0, 0, 39, Math.PI * 0.72, Math.PI * .93); ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 39, Math.PI * 1.72, Math.PI * 1.93);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, 0, 39, Math.PI * 0.72, Math.PI * 0.93);
+  ctx.stroke();
 
   if (thrusting) drawThrust(ctx, timestamp);
 
@@ -144,10 +164,17 @@ function drawOneShip(ctx, x, y, angle, thrusting, timestamp) {
   ctx.closePath();
   ctx.fill();
   ctx.fillStyle = '#68ebf9';
-  ctx.beginPath(); ctx.ellipse(0, -3, 3.2, 9, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(0, -3, 3.2, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
   ctx.strokeStyle = '#247ea7';
   ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(-14, 15); ctx.lineTo(-7, 9); ctx.moveTo(14, 15); ctx.lineTo(7, 9); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-14, 15);
+  ctx.lineTo(-7, 9);
+  ctx.moveTo(14, 15);
+  ctx.lineTo(7, 9);
+  ctx.stroke();
   ctx.fillStyle = '#7ef2ff';
   ctx.fillRect(-4, 13, 8, 4);
   ctx.restore();
