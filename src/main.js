@@ -1,5 +1,6 @@
 import { ARENA, wrapShip } from './sim/arena.js';
 import { createShip, integrate, SHIP_PHYSICS } from './sim/ship.js';
+import { Game } from './sim/game.js';
 import { createInput } from './input.js';
 import { createLoop } from './loop.js';
 import { createCanvasSurface } from './render/canvas.js';
@@ -8,56 +9,59 @@ import { createRenderer } from './render/draw.js';
 const $ = (selector) => document.querySelector(selector);
 const params = new URLSearchParams(window.location.search);
 const experiment = ['block', 'interval', 'variable'].includes(params.get('experiment'))
-  ? params.get('experiment')
-  : null;
+  ? params.get('experiment') : null;
 const autoThrust = params.get('autothrust') === '1';
-
 const canvas = $('#arena');
 const surface = createCanvasSurface(canvas);
 const renderer = createRenderer(surface);
 const input = createInput();
-let current = createShip(ARENA.width / 2, ARENA.height / 2);
+let game = new Game();
+let current = autoThrust ? createShip(ARENA.width / 2, ARENA.height / 2) : game.playerState;
 let previous = { ...current };
 let simulatedSeconds = 0;
 let benchmarkComplete = false;
 let paused = false;
 let lastHudUpdate = 0;
 
-function resetShip() {
-  current = createShip(ARENA.width / 2, ARENA.height / 2);
+function resetSimulation() {
+  game = new Game();
+  current = autoThrust ? createShip(ARENA.width / 2, ARENA.height / 2) : game.playerState;
   previous = { ...current };
   simulatedSeconds = 0;
   benchmarkComplete = false;
   input.endStep();
+  $('#experiment-alert').hidden = !experiment && !autoThrust;
   updateFlightTelemetry();
 }
 
 function simulate(dt) {
   if (autoThrust && benchmarkComplete) return;
-  if (input.justPressed('KeyR') && !autoThrust) resetShip();
-
+  if (input.justPressed('KeyR') && !autoThrust) resetSimulation();
   previous = { ...current };
-  const controls = autoThrust
-    ? { thrust: true, brake: false, turnLeft: false, turnRight: false }
-    : input.snapshot();
-  const actualDt = autoThrust ? Math.min(dt, Math.max(0, 5 - simulatedSeconds)) : dt;
-  current = wrapShip(integrate(current, controls, actualDt));
-  simulatedSeconds += actualDt;
-  input.endStep();
-
-  if (autoThrust && simulatedSeconds >= 5 - 1e-9) {
-    benchmarkComplete = true;
-    const result = {
-      experiment: experiment || 'fixed',
-      simSeconds: Number(simulatedSeconds.toFixed(4)),
-      x: Number(current.x.toFixed(4)),
-      y: Number(current.y.toFixed(4)),
-      velocity: Number(Math.hypot(current.vx, current.vy).toFixed(4)),
-    };
-    console.info('[SPACE ARENA] 5-second controlled thrust benchmark', result);
-    $('#experiment-alert').hidden = false;
-    $('#experiment-alert').textContent = `5.00s benchmark finished: x=${result.x}, y=${result.y}, speed=${result.velocity}. See console for full result.`;
+  if (autoThrust) {
+    // Original Lab 01 benchmark is unchanged by combat and random encounters.
+    const actualDt = Math.min(dt, Math.max(0, 5 - simulatedSeconds));
+    current = wrapShip(integrate(current, { thrust: true, brake: false, turnLeft: false, turnRight: false }, actualDt));
+    simulatedSeconds += actualDt;
+    if (simulatedSeconds >= 5 - 1e-9) {
+      benchmarkComplete = true;
+      const result = {
+        experiment: experiment || 'fixed', simSeconds: Number(simulatedSeconds.toFixed(4)),
+        x: Number(current.x.toFixed(4)), y: Number(current.y.toFixed(4)),
+        velocity: Number(Math.hypot(current.vx, current.vy).toFixed(4)),
+      };
+      console.info('[SPACE ARENA] 5-second controlled thrust benchmark', result);
+      $('#experiment-alert').hidden = false;
+      $('#experiment-alert').textContent = `5.00s benchmark finished: x=${result.x}, y=${result.y}, speed=${result.velocity}. See console.`;
+    }
+  } else {
+    game.simulate(dt, input.snapshot(), {
+      shooting: input.isDown('Space'),
+      guided: input.isDown('ShiftLeft') || input.isDown('ShiftRight'),
+    });
+    current = game.playerState;
   }
+  input.endStep();
 }
 
 function updateFlightTelemetry() {
@@ -74,6 +78,14 @@ function updateFlightTelemetry() {
   for (const key of ['w', 'a', 's', 'd']) {
     $(`#key-${key}`).classList.toggle('pressed', input.isDown(`Key${key.toUpperCase()}`));
   }
+  if (!autoThrust) {
+    const hud = game.hud;
+    $('#score').textContent = hud.score.toLocaleString('en-US');
+    $('#health').textContent = `${'♥'.repeat(hud.hp)}${'♡'.repeat(hud.maxHp - hud.hp)}`;
+    $('#asteroids').textContent = String(hud.asteroids);
+    $('#bullets').textContent = String(hud.bullets);
+    $('#respawn-status').textContent = hud.respawnIn > 0 ? `RESPAWN ${hud.respawnIn.toFixed(1)}s` : 'READY';
+  }
 }
 
 function updateStats(stats) {
@@ -84,7 +96,7 @@ function updateStats(stats) {
 const loop = createLoop({
   simulate,
   render(alpha, stats, timestamp) {
-    renderer.render(previous, current, alpha, timestamp);
+    renderer.render(previous, current, alpha, timestamp, autoThrust ? null : game.world);
     if (timestamp - lastHudUpdate > 90) {
       lastHudUpdate = timestamp;
       $('#frame-time').textContent = stats.frameMs.toFixed(1);
@@ -99,8 +111,7 @@ const loop = createLoop({
 
 function setPaused(next) {
   paused = next;
-  if (paused) loop.stop();
-  else loop.start();
+  if (paused) loop.stop(); else loop.start();
   $('#pause-overlay').hidden = !paused;
   $('#pause-label').textContent = paused ? 'Resume simulation' : 'Pause simulation';
   $('#pause-icon').textContent = paused ? '▶' : 'Ⅱ';
@@ -112,12 +123,10 @@ function setPaused(next) {
 }
 
 $('#pause-button').addEventListener('click', () => setPaused(!paused));
-$('#reset-button').addEventListener('click', () => resetShip());
+$('#reset-button').addEventListener('click', resetSimulation);
 window.addEventListener('keydown', (event) => {
-  if (event.code === 'KeyP' && !event.repeat && !['INPUT', 'TEXTAREA'].includes(event.target?.tagName)) {
-    setPaused(!paused);
-  }
-  if (event.code === 'KeyR' && paused) resetShip();
+  if (event.code === 'KeyP' && !event.repeat && !['INPUT', 'TEXTAREA'].includes(event.target?.tagName)) setPaused(!paused);
+  if (event.code === 'KeyR' && paused) resetSimulation();
 });
 
 if (experiment) {
@@ -131,20 +140,25 @@ if (experiment) {
 }
 if (autoThrust && !experiment) {
   $('#experiment-alert').hidden = false;
-  $('#experiment-alert').textContent = 'Automated 5 s thrust benchmark: the ship will fly straight ahead.';
+  $('#experiment-alert').textContent = 'Original Lab 01 automated 5-second thrust benchmark (no combat).';
 }
 
-// Intentionally read-only observation point for DevTools and scripted experiments.
 window.__spaceArenaDebug = Object.freeze({
   getState: () => ({ ...current, simulatedSeconds, benchmarkComplete }),
   getStats: () => loop.getStats(),
   getMode: () => experiment || 'fixed',
+  getWorld: () => ({
+    score: game.score,
+    hud: { ...game.hud },
+    entities: [...game.world].map((e) => ({ id: e.id, kind: e.kind, team: e.team, x: e.position.x, y: e.position.y, alive: e.alive })),
+  }),
+  // Demonstration helper: fire on the bound Ship instance (never expose a mutable reference).
+  getThisDemo: () => ({ methodOwner: 'Ship', example: 'player.fire.bind(player)' }),
 });
 
-renderer.render(previous, current, 1, 0);
+renderer.render(previous, current, 1, 0, autoThrust ? null : game.world);
+updateFlightTelemetry();
 loop.start();
 window.addEventListener('pagehide', () => {
-  loop.stop();
-  input.dispose();
-  surface.dispose();
+  loop.stop(); input.dispose(); surface.dispose();
 });

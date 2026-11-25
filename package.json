@@ -1,9 +1,9 @@
 {
   "name": "space-arena",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Space Arena: lab 01 foundation of an eight-lab JavaScript multiplayer game",
+  "description": "Space Arena: lab 02 entity model, ship combat, pickups and homing",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
